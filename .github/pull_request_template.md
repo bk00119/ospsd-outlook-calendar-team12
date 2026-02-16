@@ -23,8 +23,8 @@
 
 ## Impacted Areas
 
-- [ ] `mail_client_api`
-- [ ] `gmail_client_impl`
+- [ ] `calendar_client_api`
+- [ ] `outlook_client_impl`
 - [ ] Documentation
 - [ ] Tests
 - [ ] Tooling / CI
