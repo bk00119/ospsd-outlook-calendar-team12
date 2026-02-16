@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Create a report to help us improve the email assistant system
+about: Create a report to help us improve the calendar assistant system
 title: "[BUG] "
 labels: ["bug", "needs-triage"]
 assignees: ""
@@ -14,8 +14,8 @@ assignees: ""
 
 **Component(s) Affected:**
 
-- [ ] `mail_client_api` - Mail client abstraction
-- [ ] `gmail_client_impl` - Gmail client implementation
+- [ ] `calendar_client_api` - Calendar client abstraction
+- [ ] `outlook_client_impl` - Outlook client implementation
 - [ ] Testing infrastructure
 - [ ] CI/CD pipeline
 - [ ] Documentation
@@ -40,7 +40,7 @@ A clear and concise description of what actually happened.
 
 ```python
 # Provide the minimal code that reproduces the issue
-from mail_client_api import get_client
+from calendar_client_api import get_client
 
 client = get_client()
 # ... rest of the code that causes the bug
