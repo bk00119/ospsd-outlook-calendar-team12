@@ -55,6 +55,11 @@ class OutlookClient(calendar_client_api.Client):
         err_msg = "OutlookClient.get_event is not yet implemented."
         raise NotImplementedError(err_msg)
 
+    def list_events(self) -> list[event.Event]:
+        """Return a list of calendar events from Outlook."""
+        err_msg = "OutlookClient.list_events is not yet implemented."
+        raise NotImplementedError(err_msg)
+
     def create_event(self, event_data: event.Event) -> event.Event:
         """Create a new event in Outlook and return the created event.
 

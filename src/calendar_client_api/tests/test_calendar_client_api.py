@@ -28,6 +28,14 @@ def test_client_get_event() -> None:
     assert retrieved_event.id == "specific_event_id"
 
 
+def test_client_list_events() -> None:
+    """Verifies the contract for the `list_events` method."""
+    mock_client = Mock(spec=Client)
+    mock_client.list_events.return_value = []
+
+    assert mock_client.list_events() == []
+
+
 def test_client_create_event() -> None:
     """Verifies and documents the contract for the `create_event` method."""
     # ARRANGE
