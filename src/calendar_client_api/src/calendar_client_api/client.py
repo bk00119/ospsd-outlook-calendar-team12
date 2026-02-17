@@ -15,6 +15,15 @@ class Client(ABC):
         """Return an event by its ID."""
         raise NotImplementedError
 
+    @abstractmethod
+    def create_event(self, event: Event) -> Event:
+        """Persist a draft event and return the provider-created instance.
+
+        The input event provides creation fields (for example title/start/end),
+        while the returned event reflects provider-assigned fields such as ID.
+        """
+        raise NotImplementedError
+
     # TODO: Define additional abstract methods for calendar operations
 
 
