@@ -88,6 +88,26 @@ class OutlookClient(calendar_client_api.Client):
         err_msg = "OutlookClient.delete_event is not yet implemented."
         raise NotImplementedError(err_msg)
 
+    def update_event(self, event_id: str, payload: event.EventPatch) -> event.Event:
+        """Update an event by id in Outlook and return the updated event.
+
+        Args:
+            event_id: The id of the event that needs to be updated.
+            payload: The patch of fields that needs to be updated.
+                    Missing fields will remain the same.
+
+        Returns:
+            The updated event.
+
+        Raises:
+            Exception: If the updating fails for reasons like wrong event id.
+
+        """
+        # TODO: integrate with Outlook Graph API to update the event
+        err_msg = "OutlookClient.update_event is not yet implemented."
+        raise NotImplementedError(err_msg)
+
+
 def get_client_impl(*, interactive: bool = False) -> calendar_client_api.Client:
     """Return a configured :class:`OutlookClient` instance."""
     return OutlookClient(interactive=interactive)

@@ -8,7 +8,7 @@ and serve as documentation for the expected API contracts.
 
 from unittest.mock import Mock
 
-from calendar_client_api import Client, Event
+from calendar_client_api import Client, Event, EventPatch
 
 
 def test_client_get_event() -> None:
@@ -62,3 +62,26 @@ def test_client_delete_event() -> None:
 
     # ASSERT
     mock_client.delete_event.assert_called_once_with(event_id="event_to_delete")
+
+
+def test_client_update_event() -> None:
+    """Verifies and documents the contract for the `update_event` method."""
+    # ARRANGE
+    mock_event = Mock(spec=Event)
+    mock_event.id = "event-123"
+    mock_event.title = "second meeting"
+
+    mock_patch = Mock(spec=EventPatch)
+    mock_patch.title = "second meeting"
+
+    mock_client = Mock(spec=Client)
+    mock_client.update_event.return_value = mock_event
+
+    # ACT
+    updated_event = mock_client.update_event(event_id="event-123", payload=mock_patch)
+
+    # ASSERT
+    mock_client.update_event.assert_called_once_with(event_id="event-123", payload=mock_patch)
+    assert updated_event.id == "event-123"
+    assert updated_event.title == "second meeting"
+
