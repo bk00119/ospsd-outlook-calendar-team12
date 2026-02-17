@@ -69,6 +69,20 @@ class OutlookClient(calendar_client_api.Client):
         err_msg = "OutlookClient.create_event is not yet implemented."
         raise NotImplementedError(err_msg)
 
+    def delete_event(self, event_id: str) -> None:
+        """Delete a specific event by its ID.
+
+        Args:
+            event_id: The unique identifier of the event to delete.
+
+        Raises:
+            Exception: If the event cannot be deleted from the Outlook API.
+
+        """
+        # TODO: implementation for deleting an event using the Outlook API
+        err_msg = "OutlookClient.delete_event is not yet implemented."
+        raise NotImplementedError(err_msg)
+
 def get_client_impl(*, interactive: bool = False) -> calendar_client_api.Client:
     """Return a configured :class:`OutlookClient` instance."""
     return OutlookClient(interactive=interactive)
