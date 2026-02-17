@@ -11,4 +11,5 @@
 - Keep event-type dependencies explicit through the `calendar_client_api.event` module.
 - Define the basic event operations (`create_event`, `get_event`, `delete_event`, `update_event`, `list_event`) every client must support.
 
+
 ## Architecture
