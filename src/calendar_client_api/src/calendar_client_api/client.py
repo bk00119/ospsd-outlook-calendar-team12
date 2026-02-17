@@ -15,6 +15,11 @@ class Client(ABC):
         """Return an event by its ID."""
         raise NotImplementedError
 
+    @abstractmethod
+    def list_events(self) -> list[Event]:
+        """Return a list of calendar events."""
+        raise NotImplementedError
+
     # TODO: Define additional abstract methods for calendar operations
 
 

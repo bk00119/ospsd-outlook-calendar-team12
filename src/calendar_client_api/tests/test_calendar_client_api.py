@@ -26,3 +26,11 @@ def test_client_get_event() -> None:
     # ASSERT
     mock_client.get_event.assert_called_once_with(event_id="specific_event_id")
     assert retrieved_event.id == "specific_event_id"
+
+
+def test_client_list_events() -> None:
+    """Verifies the contract for the `list_events` method."""
+    mock_client = Mock(spec=Client)
+    mock_client.list_events.return_value = []
+
+    assert mock_client.list_events() == []
