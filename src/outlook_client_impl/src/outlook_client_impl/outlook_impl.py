@@ -58,6 +58,33 @@ class OutlookClient(calendar_client_api.Client):
     def list_events(self) -> list[event.Event]:
         """Return a list of calendar events from Outlook."""
         err_msg = "OutlookClient.list_events is not yet implemented."
+        
+    def create_event(self, event_data: event.Event) -> event.Event:
+        """Create a new event in Outlook and return the created event.
+
+        Args:
+            event_data: The event data to persist to Outlook.
+
+        Returns:
+            An Event reflecting the created resource.
+
+        """
+        # TODO: integrate with Outlook Graph API to create the event
+        err_msg = "OutlookClient.create_event is not yet implemented."
+        raise NotImplementedError(err_msg)
+
+    def delete_event(self, event_id: str) -> None:
+        """Delete a specific event by its ID.
+
+        Args:
+            event_id: The unique identifier of the event to delete.
+
+        Raises:
+            Exception: If the event cannot be deleted from the Outlook API.
+
+        """
+        # TODO: implementation for deleting an event using the Outlook API
+        err_msg = "OutlookClient.delete_event is not yet implemented."
         raise NotImplementedError(err_msg)
 
 def get_client_impl(*, interactive: bool = False) -> calendar_client_api.Client:
