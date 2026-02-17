@@ -26,6 +26,11 @@ class Client(ABC):
 
     # TODO: Define additional abstract methods for calendar operations
 
+    @abstractmethod
+    def delete_event(self, event_id: str) -> None:
+        """Delete an event by its ID."""
+        raise NotImplementedError
+
 
 def get_client(*, interactive: bool = False) -> Client:
     """Return an instance of a Calendar Client."""

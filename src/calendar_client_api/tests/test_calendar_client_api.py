@@ -43,3 +43,14 @@ def test_client_create_event() -> None:
     # ASSERT
     mock_client.create_event.assert_called_once_with(event=mock_event)
     assert created_event.id == "new_event_id"
+
+def test_client_delete_event() -> None:
+    """Verifies and documents the contract for the `delete_event` method."""
+    # ARRANGE
+    mock_client = Mock(spec=Client)
+
+    # ACT
+    mock_client.delete_event(event_id="event_to_delete")
+
+    # ASSERT
+    mock_client.delete_event.assert_called_once_with(event_id="event_to_delete")
