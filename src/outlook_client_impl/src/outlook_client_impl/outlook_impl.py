@@ -213,6 +213,7 @@ class OutlookClient(calendar_client_api.Client):
         raise NotImplementedError(err_msg)
 
 
+
 def get_client_impl(*, interactive: bool = False) -> calendar_client_api.Client:
     """Return a configured :class:`OutlookClient` instance."""
     return OutlookClient(interactive=interactive)

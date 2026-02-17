@@ -36,6 +36,7 @@ def test_client_list_events() -> None:
     assert mock_client.list_events() == []
 
 
+
 def test_client_create_event() -> None:
     """Verifies and documents the contract for the `create_event` method."""
     # ARRANGE
