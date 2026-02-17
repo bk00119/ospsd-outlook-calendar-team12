@@ -29,6 +29,7 @@ class Client(ABC):
         """
         raise NotImplementedError
 
+
     # TODO: Define additional abstract methods for calendar operations
 
     @abstractmethod
