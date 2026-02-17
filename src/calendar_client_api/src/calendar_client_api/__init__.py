@@ -2,6 +2,6 @@
 
 from calendar_client_api import event
 from calendar_client_api.client import Client, get_client
-from calendar_client_api.event import Event, get_event
+from calendar_client_api.event import Event, EventPatch, get_event
 
-__all__ = ["Client", "Event", "event", "get_client", "get_event"]
+__all__ = ["Client", "Event", "EventPatch", "event", "get_client", "get_event"]

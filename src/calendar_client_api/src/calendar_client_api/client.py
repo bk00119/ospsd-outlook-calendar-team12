@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 
-from calendar_client_api.event import Event
+from calendar_client_api.event import Event, EventPatch
 
 __all__ = ["Client", "get_client"]
 
@@ -34,6 +34,16 @@ class Client(ABC):
     @abstractmethod
     def delete_event(self, event_id: str) -> None:
         """Delete an event by its ID."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def update_event(self, event_id: str, payload: EventPatch) -> Event:
+        """Update an event by its ID with a payload.
+
+        Omitted data fields will remain the same.
+
+        Returns the updated event if successful, otherwise raise an error
+        """
         raise NotImplementedError
 
 

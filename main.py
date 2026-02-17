@@ -17,7 +17,7 @@ def main() -> None:
     client = calendar_client_api.get_client(interactive=False)
 
     # TODO: update test_event_id for get_event() after implementing get_messages()
-    test_event_id = 1
+    test_event_id = "event-123"
     event = client.get_event(test_event_id)
     if not event:
       return

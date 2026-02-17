@@ -1,6 +1,7 @@
 """Event contract - Core event representation."""
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import datetime
 
 
@@ -66,3 +67,14 @@ def get_event(event_id: str, raw_data: str) -> Event:
 
     """
     raise NotImplementedError
+
+@dataclass(frozen=True)
+class EventPatch:
+    """A class used for partially updating event."""
+
+    title: str | None = None
+    calendar_id: str | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    location: str | None = None
+    description: str | None = None
