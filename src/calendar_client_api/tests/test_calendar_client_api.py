@@ -26,3 +26,20 @@ def test_client_get_event() -> None:
     # ASSERT
     mock_client.get_event.assert_called_once_with(event_id="specific_event_id")
     assert retrieved_event.id == "specific_event_id"
+
+
+def test_client_create_event() -> None:
+    """Verifies and documents the contract for the `create_event` method."""
+    # ARRANGE
+    mock_event = Mock(spec=Event)
+    mock_event.id = "new_event_id"
+
+    mock_client = Mock(spec=Client)
+    mock_client.create_event.return_value = mock_event
+
+    # ACT
+    created_event = mock_client.create_event(event=mock_event)
+
+    # ASSERT
+    mock_client.create_event.assert_called_once_with(event=mock_event)
+    assert created_event.id == "new_event_id"

@@ -55,6 +55,20 @@ class OutlookClient(calendar_client_api.Client):
         err_msg = "OutlookClient.get_event is not yet implemented."
         raise NotImplementedError(err_msg)
 
+    def create_event(self, event_data: event.Event) -> event.Event:
+        """Create a new event in Outlook and return the created event.
+
+        Args:
+            event_data: The event data to persist to Outlook.
+
+        Returns:
+            An Event reflecting the created resource.
+
+        """
+        # TODO: integrate with Outlook Graph API to create the event
+        err_msg = "OutlookClient.create_event is not yet implemented."
+        raise NotImplementedError(err_msg)
+
 def get_client_impl(*, interactive: bool = False) -> calendar_client_api.Client:
     """Return a configured :class:`OutlookClient` instance."""
     return OutlookClient(interactive=interactive)
