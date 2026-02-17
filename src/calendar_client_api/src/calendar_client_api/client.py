@@ -19,8 +19,8 @@ class Client(ABC):
     def list_events(self) -> list[Event]:
         """Return a list of calendar events."""
         raise NotImplementedError
-        
-    @abstractmethod    
+
+    @abstractmethod
     def create_event(self, event: Event) -> Event:
         """Persist a draft event and return the provider-created instance.
 
