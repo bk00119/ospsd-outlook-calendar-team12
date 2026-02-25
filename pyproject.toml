@@ -51,13 +51,6 @@ mypy_path = ["src/calendar_client_api/src", "src/outlook_client_impl/src"]
 ignore_missing_imports = false
 warn_unused_ignores = false
 
-# Allow untyped imports for specific modules
-[[tool.mypy.overrides]]
-module = [
-    "outlook.*",
-]
-ignore_missing_imports = true
-
 [tool.pytest.ini_options]
 pythonpath = [
     ".",
