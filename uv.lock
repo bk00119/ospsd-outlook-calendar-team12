@@ -661,7 +661,6 @@ name = "outlook-client-impl"
 version = "0.1.0"
 source = { editable = "src/outlook_client_impl" }
 dependencies = [
-    { name = "calendar-client-api" },
     { name = "dotenv" },
 ]
 
@@ -673,7 +672,6 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "calendar-client-api", editable = "src/calendar_client_api" },
     { name = "dotenv", specifier = ">=0.9.9" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
     { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.10.0" },
