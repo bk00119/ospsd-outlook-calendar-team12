@@ -27,10 +27,7 @@ Create a **Context** named `outlook-client` with:
 | Variable              | Description                            |
 | --------------------- | -------------------------------------- |
 | `AZURE_CLIENT_ID`     | Application (client) ID                |
-| `AZURE_CLIENT_SECRET` | Secret key for the application         |
-| `AZURE_TENANT_ID`     | Directory (tenant) ID                  |
-| `GRAPH_API_SCOPE`     | `https://graph.microsoft.com/.default` |
-| `GRAPH_API_ENDPOINT`  | `https://graph.microsoft.com/v1.0`     |
+| `AZURE_AUTHORITY`     | Authority URL (for example, `https://login.microsoftonline.com/consumers`) |
 
 ## Workflows
 

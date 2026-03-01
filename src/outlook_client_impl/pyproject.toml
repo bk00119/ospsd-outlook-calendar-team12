@@ -5,7 +5,7 @@ description = "A Python client library for interacting with Outlook calendar API
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "dotenv>=0.9.9",
+    "python-dotenv>=1.0.0",
     "calendar-client-api",
     "msal",
     "msgraph-sdk",

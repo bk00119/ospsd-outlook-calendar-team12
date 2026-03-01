@@ -12,11 +12,11 @@ import inspect
 import json
 import os
 from collections.abc import Callable, Coroutine, Mapping
-from pathlib import Path
 from typing import Any, ClassVar, TypeVar, cast
 
 import calendar_client_api
 from calendar_client_api import event
+from dotenv import load_dotenv
 from kiota_serialization_json.json_serialization_writer import JsonSerializationWriter
 from msgraph.graph_service_client import GraphServiceClient
 
@@ -24,22 +24,7 @@ from .auth_manager import AuthManager
 
 T = TypeVar("T")
 
-# Try to load .env file if python-dotenv is available
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-except ImportError:
-    # If python-dotenv is not available, check if .env file exists
-    # and manually load it
-    env_path = Path(".env")
-    if env_path.exists():
-        with env_path.open() as f:
-            for raw_line in f:
-                line = raw_line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    key, value = line.split("=", 1)
-                    os.environ[key.strip()] = value.strip()
+load_dotenv()
 
 
 class OutlookClient(calendar_client_api.Client):
