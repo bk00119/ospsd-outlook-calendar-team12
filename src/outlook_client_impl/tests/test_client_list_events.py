@@ -14,7 +14,7 @@ from outlook_client_impl.outlook_impl import OutlookClient
 if TYPE_CHECKING:
     from msgraph.graph_service_client import GraphServiceClient
 
-UTC = datetime.timezone.utc
+UTC = datetime.UTC
 
 
 def _make_item(
@@ -37,7 +37,7 @@ def _make_item(
 class AsyncEventsBuilderStub:
     """Graph events-builder stub with async get()."""
 
-    def __init__(self, items: list[object]) -> None:
+    def __init__(self, items: list[dict[str, object]]) -> None:
         """Store the items to return from get()."""
         self._items = items
 
@@ -49,7 +49,7 @@ class AsyncEventsBuilderStub:
 class SyncEventsBuilderStub:
     """Graph events-builder stub with sync get()."""
 
-    def __init__(self, items: list[object]) -> None:
+    def __init__(self, items: list[dict[str, object]]) -> None:
         """Store the items to return from get()."""
         self._items = items
 
@@ -76,16 +76,11 @@ class ServiceStub:
     me: MeStub
 
 
-def _client(items: list[object], *, sync: bool = False) -> OutlookClient:
+def _client(items: list[dict[str, object]], *, sync: bool = False) -> OutlookClient:
     """Return an OutlookClient backed by a stub service."""
     builder = SyncEventsBuilderStub(items) if sync else AsyncEventsBuilderStub(items)
     stub = ServiceStub(me=MeStub(events=builder))
     return OutlookClient(service=cast("GraphServiceClient", stub))
-
-
-# ---------------------------------------------------------------------------
-# Basic listing
-# ---------------------------------------------------------------------------
 
 
 def test_list_events_returns_empty_list() -> None:
@@ -98,7 +93,7 @@ def test_list_events_returns_all_events_unfiltered() -> None:
     items = [_make_item("e1", "Meeting"), _make_item("e2", "Lunch")]
     results = _client(items).list_events()
 
-    assert len(results) == 2
+    assert len(results) == 2  # noqa: PLR2004
     assert results[0].id == "e1"
     assert results[1].id == "e2"
 
@@ -117,11 +112,6 @@ def test_list_events_works_with_sync_get() -> None:
 
     assert len(results) == 1
     assert results[0].id == "e1"
-
-
-# ---------------------------------------------------------------------------
-# Filter: start
-# ---------------------------------------------------------------------------
 
 
 def test_list_events_filter_start_excludes_earlier_events() -> None:
@@ -146,11 +136,6 @@ def test_list_events_filter_start_includes_event_at_boundary() -> None:
     assert len(results) == 1
 
 
-# ---------------------------------------------------------------------------
-# Filter: end
-# ---------------------------------------------------------------------------
-
-
 def test_list_events_filter_end_excludes_later_events() -> None:
     """Events ending after `end` are excluded."""
     items = [
@@ -171,11 +156,6 @@ def test_list_events_filter_end_includes_event_at_boundary() -> None:
     results = _client(items).list_events(end=cutoff)
 
     assert len(results) == 1
-
-
-# ---------------------------------------------------------------------------
-# Filter: types
-# ---------------------------------------------------------------------------
 
 
 def test_list_events_filter_types_single() -> None:
@@ -200,7 +180,7 @@ def test_list_events_filter_types_multiple() -> None:
     ]
     results = _client(items).list_events(types=["singleInstance", "occurrence"])
 
-    assert len(results) == 2
+    assert len(results) == 2  # noqa: PLR2004
     assert {r.id for r in results} == {"e1", "e2"}
 
 
@@ -212,13 +192,8 @@ def test_list_events_filter_types_no_match_returns_empty() -> None:
     assert results == []
 
 
-# ---------------------------------------------------------------------------
-# Combined filters
-# ---------------------------------------------------------------------------
-
-
 def test_list_events_combined_start_and_types() -> None:
-    """start and types filters are applied together."""
+    """Start and types filters are applied together."""
     items = [
         _make_item("e1", start="2026-03-01T08:00:00+00:00", event_type="singleInstance"),
         _make_item("e2", start="2026-03-01T14:00:00+00:00", event_type="singleInstance"),
@@ -229,11 +204,6 @@ def test_list_events_combined_start_and_types() -> None:
 
     assert len(results) == 1
     assert results[0].id == "e2"
-
-
-# ---------------------------------------------------------------------------
-# Error cases
-# ---------------------------------------------------------------------------
 
 
 def test_list_events_raises_when_service_missing() -> None:

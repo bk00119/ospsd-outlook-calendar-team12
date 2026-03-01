@@ -34,6 +34,7 @@ class Client(ABC):
 
         Returns:
             A list of :class:`Event` instances matching the given criteria.
+
         """
         raise NotImplementedError
 

@@ -45,8 +45,8 @@ def test_client_list_events_with_filters() -> None:
     mock_client = Mock(spec=Client)
     mock_client.list_events.return_value = [mock_event]
 
-    start = datetime.datetime(2026, 3, 1, 9, 0, tzinfo=datetime.timezone.utc)
-    end = datetime.datetime(2026, 3, 1, 18, 0, tzinfo=datetime.timezone.utc)
+    start = datetime.datetime(2026, 3, 1, 9, 0, tzinfo=datetime.UTC)
+    end = datetime.datetime(2026, 3, 1, 18, 0, tzinfo=datetime.UTC)
 
     results = mock_client.list_events(start=start, end=end, types=["singleInstance"])
 
