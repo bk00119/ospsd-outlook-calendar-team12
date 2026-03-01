@@ -31,7 +31,19 @@ class OutlookCalendarEvent(event.Event):
         """Get the unique event identifier."""
         return self._id
 
-    # TODO: fix the properties and methods as needed
+    def _parse_datetime(self, value: object) -> datetime.datetime:
+        """Parse Graph datetime strings and normalize to timezone-aware values."""
+        if not isinstance(value, str) or not value:
+            return datetime.datetime.min.replace(tzinfo=datetime.UTC)
+
+        normalized = value.replace("Z", "+00:00")
+        try:
+            parsed = datetime.datetime.fromisoformat(normalized)
+        except ValueError:
+            return datetime.datetime.min.replace(tzinfo=datetime.UTC)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=datetime.UTC)
+        return parsed
 
     @property
     def title(self) -> str:
@@ -42,36 +54,40 @@ class OutlookCalendarEvent(event.Event):
     @property
     def starts_at(self) -> datetime.datetime:
         """Get the event start time as a datetime object."""
-        dt_str = self._parsed.get("start", {}).get("dateTime")
-        if not dt_str:
-            return datetime.datetime.min.replace(tzinfo=datetime.UTC)
-        return datetime.datetime.fromisoformat(dt_str)
+        start_data = self._parsed.get("start", {})
+        dt_value = start_data.get("dateTime") if isinstance(start_data, dict) else None
+        return self._parse_datetime(dt_value)
 
     @property
     def ends_at(self) -> datetime.datetime:
         """Get the event end time as a datetime object."""
-        dt_str = self._parsed.get("end", {}).get("dateTime")
-        if not dt_str:
-            return datetime.datetime.min.replace(tzinfo=datetime.UTC)
-        return datetime.datetime.fromisoformat(dt_str)
+        end_data = self._parsed.get("end", {})
+        dt_value = end_data.get("dateTime") if isinstance(end_data, dict) else None
+        return self._parse_datetime(dt_value)
 
     @property
-    def location(self) -> str:
+    def location(self) -> str | None:
         """Get the event location."""
         loc = self._parsed.get("location", {})
-        val = loc.get("displayName", "")
-        return str(val)
+        val = loc.get("displayName") if isinstance(loc, dict) else None
+        if val is None:
+            return None
+        clean = str(val).strip()
+        return clean or None
 
     @property
-    def description(self) -> str:
+    def description(self) -> str | None:
         """Get the event description."""
         body = self._parsed.get("body", {})
-        return str(body.get("content", self._parsed.get("bodyPreview", "")))
-
-    @property
-    def calendar_id(self) -> str:
-        """Get the calendar ID associated with this event."""
-        return str(self._parsed.get("calendarId", "Unknown Calendar"))
+        content: object | None = None
+        if isinstance(body, dict):
+            content = body.get("content")
+        if content is None:
+            content = self._parsed.get("bodyPreview")
+        if content is None:
+            return None
+        clean = str(content).strip()
+        return clean or None
 
 
 def get_event_impl(event_id: str, raw_data: str) -> event.Event:
