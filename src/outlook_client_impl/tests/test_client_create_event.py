@@ -4,19 +4,25 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
 from outlook_client_impl.outlook_impl import OutlookClient
+
+if TYPE_CHECKING:
+    from msgraph.graph_service_client import GraphServiceClient
 
 
 class AsyncEventsBuilderStub:
     """Graph events request-builder stub with async post()."""
 
     def __init__(self) -> None:
+        """Track the last payload passed to post()."""
         self.last_payload: object | None = None
 
     async def post(self, payload: object) -> object:
+        """Capture payload and return a created-event-like object."""
         self.last_payload = payload
         return {
             "id": "created-123",
@@ -32,16 +38,18 @@ class SyncEventsBuilderStub:
     """Graph events request-builder stub with sync post()."""
 
     def post(self, payload: object) -> object:
+        """Return a synchronous created-event-like object."""
         _ = payload
         return {"id": "created-sync-1", "subject": "Sync Builder Event"}
 
 
 def _client_with_events_builder(events_builder: object) -> OutlookClient:
     service = SimpleNamespace(me=SimpleNamespace(events=events_builder))
-    return OutlookClient(service=service)
+    return OutlookClient(service=cast("GraphServiceClient", service))
 
 
 def test_create_event_builds_payload_and_returns_hydrated_event() -> None:
+    """Builds Graph payload and returns hydrated Event."""
     events_builder = AsyncEventsBuilderStub()
     client = _client_with_events_builder(events_builder)
 
@@ -66,6 +74,7 @@ def test_create_event_builds_payload_and_returns_hydrated_event() -> None:
 
 
 def test_create_event_supports_sync_post_result() -> None:
+    """Accepts synchronous SDK-style post() responses."""
     client = _client_with_events_builder(SyncEventsBuilderStub())
 
     result = client.create_event(
@@ -80,6 +89,7 @@ def test_create_event_supports_sync_post_result() -> None:
 
 @pytest.mark.parametrize("title", ["", "   "])
 def test_create_event_rejects_empty_title(title: str) -> None:
+    """Rejects empty or whitespace-only title values."""
     client = _client_with_events_builder(AsyncEventsBuilderStub())
 
     with pytest.raises(ValueError, match="title must be a non-empty string"):
@@ -91,6 +101,7 @@ def test_create_event_rejects_empty_title(title: str) -> None:
 
 
 def test_create_event_rejects_invalid_time_range() -> None:
+    """Rejects events where ends_at is not after starts_at."""
     client = _client_with_events_builder(AsyncEventsBuilderStub())
 
     with pytest.raises(ValueError, match="must be after"):
@@ -102,6 +113,7 @@ def test_create_event_rejects_invalid_time_range() -> None:
 
 
 def test_create_event_raises_when_service_missing() -> None:
+    """Raises when OutlookClient has no configured service."""
     client = object.__new__(OutlookClient)
 
     with pytest.raises(RuntimeError, match="not configured"):
@@ -113,7 +125,8 @@ def test_create_event_raises_when_service_missing() -> None:
 
 
 def test_create_event_raises_for_unsupported_service_shape() -> None:
-    client = OutlookClient(service=object())
+    """Raises when service lacks me.events.post."""
+    client = OutlookClient(service=cast("GraphServiceClient", object()))
 
     with pytest.raises(NotImplementedError, match="does not support event creation"):
         client.create_event(
@@ -124,6 +137,7 @@ def test_create_event_raises_for_unsupported_service_shape() -> None:
 
 
 def test_create_event_raises_when_create_returns_none() -> None:
+    """Raises when provider returns no create payload."""
     class _NoneEventsBuilder:
         async def post(self, payload: object) -> object:
             _ = payload
@@ -140,6 +154,7 @@ def test_create_event_raises_when_create_returns_none() -> None:
 
 
 def test_create_event_raises_when_payload_missing_id() -> None:
+    """Raises when create payload has no valid event id."""
     class _NoIdEventsBuilder:
         async def post(self, payload: object) -> object:
             _ = payload

@@ -6,7 +6,7 @@ These tests use mocks to demonstrate how implementations should behave
 and serve as documentation for the expected API contracts.
 """
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from unittest.mock import Mock
 
 from calendar_client_api import Client, Event, EventPatch
