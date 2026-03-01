@@ -33,8 +33,6 @@ class Client(ABC):
         """Create an event from explicit creation fields and return it."""
         raise NotImplementedError
 
-    # TODO: Define additional abstract methods for calendar operations
-
     @abstractmethod
     def delete_event(self, event_id: str) -> None:
         """Delete an event by its ID."""
