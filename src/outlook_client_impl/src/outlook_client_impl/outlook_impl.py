@@ -8,13 +8,16 @@ The implementation supports multiple authentication modes:
     - Interactive OAuth flow (for initial setup)
 """
 import asyncio
+import inspect
+import json
 import os
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine, Mapping
 from pathlib import Path
-from typing import Any, ClassVar, TypeVar
+from typing import Any, ClassVar, TypeVar, cast
 
 import calendar_client_api
 from calendar_client_api import event
+from kiota_serialization_json.json_serialization_writer import JsonSerializationWriter
 from msgraph.graph_service_client import GraphServiceClient
 
 from .auth_manager import AuthManager
@@ -58,25 +61,25 @@ class OutlookClient(calendar_client_api.Client):
         *,
         interactive: bool = False,
     ) -> None:
-         """Initialize the OutlookClient, handling authentication."""
-         if service is not None:
-             self.service = service
-             return  # Skip auth if service is provided
+        """Initialize the OutlookClient, handling authentication."""
+        if service is not None:
+            self.service = service
+            return  # Skip auth if service is provided
 
-         client_id = self.CLIENT_ID
-         authority = self.AUTHORITY
-         if not client_id:
-             raise RuntimeError(self.MISSING_CLIENT_ID_ERR)
-         if not authority:
-             raise RuntimeError(self.MISSING_AUTHORITY_ERR)
+        client_id = self.CLIENT_ID
+        authority = self.AUTHORITY
+        if not client_id:
+            raise RuntimeError(self.MISSING_CLIENT_ID_ERR)
+        if not authority:
+            raise RuntimeError(self.MISSING_AUTHORITY_ERR)
 
-         auth = AuthManager(
-             client_id=client_id,
-             authority=authority,
-             scopes=self.SCOPES,
-             interactive=interactive,
-         )
-         self.service = auth.get_graph_client()
+        auth = AuthManager(
+            client_id=client_id,
+            authority=authority,
+            scopes=self.SCOPES,
+            interactive=interactive,
+        )
+        self.service = auth.get_graph_client()
 
 
     # Helper to run async Graph calls from sync interface methods.
@@ -86,8 +89,59 @@ class OutlookClient(calendar_client_api.Client):
         except RuntimeError:
             loop = None
         if loop and loop.is_running():
+            coro.close()
             raise RuntimeError(self.NESTED_SYNC_ERR)
         return asyncio.run(coro)
+
+    def _fetch_provider_payload(self, *, service: object, event_id: str) -> object:
+        """Fetch payload from either direct service method or Graph builder chain."""
+        direct_get_event = getattr(service, "get_event", None)
+        if callable(direct_get_event):
+            typed_get_event = cast("Callable[[str], object]", direct_get_event)
+            return typed_get_event(event_id)
+
+        me_builder = getattr(service, "me", None)
+        events_builder = (
+            getattr(me_builder, "events", None) if me_builder is not None else None
+        )
+        by_event_id = getattr(events_builder, "by_event_id", None)
+        if not callable(by_event_id):
+            msg = "The service instance does not support event retrieval."
+            raise NotImplementedError(msg)
+
+        request_builder = cast("Callable[[str], object]", by_event_id)(event_id)
+        get_method = getattr(request_builder, "get", None)
+        if not callable(get_method):
+            msg = "The Graph request builder does not expose get()."
+            raise NotImplementedError(msg)
+
+        payload = cast("Callable[[], object]", get_method)()
+        if inspect.iscoroutine(payload):
+            return self._run(cast("Coroutine[Any, Any, object]", payload))
+        if inspect.isawaitable(payload):
+            async def _await_payload() -> object:
+                return await cast("Any", payload)
+
+            return self._run(_await_payload())
+        return payload
+
+    def _serialize_provider_payload(self, payload: object) -> str:
+        """Serialize provider payload into JSON string expected by event factory."""
+        if isinstance(payload, str):
+            return payload
+        if isinstance(payload, bytes):
+            return payload.decode("utf-8")
+        if isinstance(payload, Mapping):
+            typed_payload = cast("Mapping[str, object]", payload)
+            return json.dumps(dict(typed_payload), default=str)
+        serialize = getattr(payload, "serialize", None)
+        if callable(serialize):
+            writer = JsonSerializationWriter()
+            cast("Callable[[JsonSerializationWriter], None]", serialize)(writer)
+            return writer.get_serialized_content().decode("utf-8")
+
+        msg = "Event payload must be JSON string, bytes, or mapping."
+        raise TypeError(msg)
 
     def get_event(self, event_id: str) -> event.Event:
         """Retrieve a specific event by its ID.
@@ -102,9 +156,24 @@ class OutlookClient(calendar_client_api.Client):
             Exception: If the event cannot be retrieved from the Outlook API.
 
         """
-        # TODO: implement this
-        err_msg = "OutlookClient.get_event is not yet implemented."
-        raise NotImplementedError(err_msg)
+        clean_event_id = event_id.strip()
+        if not clean_event_id:
+            msg = "event_id must be a non-empty string."
+            raise ValueError(msg)
+
+        service = getattr(self, "service", None)
+        if service is None:
+            msg = "Outlook client not configured with a service instance."
+            raise RuntimeError(msg)
+
+        payload = self._fetch_provider_payload(service=service, event_id=clean_event_id)
+
+        if payload is None:
+            msg = f"Event '{clean_event_id}' was not found."
+            raise RuntimeError(msg)
+
+        raw_data = self._serialize_provider_payload(payload)
+        return event.get_event(event_id=clean_event_id, raw_data=raw_data)
 
     def list_events(self) -> list[event.Event]:
         """Return a list of calendar events from Outlook."""
