@@ -7,6 +7,9 @@ requires-python = ">=3.11"
 dependencies = [
     "dotenv>=0.9.9",
     "calendar-client-api",
+    "msal",
+    "msgraph-sdk",
+    "azure-identity",
 ]
 
 [project.optional-dependencies]

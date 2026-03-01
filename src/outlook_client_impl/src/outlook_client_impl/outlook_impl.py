@@ -7,11 +7,19 @@ The implementation supports multiple authentication modes:
     - Local token file (for development)
     - Interactive OAuth flow (for initial setup)
 """
+import asyncio
 import os
+from collections.abc import Coroutine
 from pathlib import Path
+from typing import Any, ClassVar, TypeVar
 
 import calendar_client_api
 from calendar_client_api import event
+from msgraph.graph_service_client import GraphServiceClient
+
+from .auth_manager import AuthManager
+
+T = TypeVar("T")
 
 # Try to load .env file if python-dotenv is available
 try:
@@ -30,13 +38,56 @@ except ImportError:
                     key, value = line.split("=", 1)
                     os.environ[key.strip()] = value.strip()
 
+
 class OutlookClient(calendar_client_api.Client):
     """Concrete implementation of the Client abstraction using Outlook API."""
 
-    # TODO: modify __init__ to work with Outlook API authentication and service setup
-    def __init__(self, service: None = None, *, interactive: bool = False) -> None:
+    CLIENT_ID: ClassVar[str | None] = os.environ.get("AZURE_CLIENT_ID")
+    AUTHORITY: ClassVar[str | None] = os.environ.get("AZURE_AUTHORITY")
+    SCOPES: ClassVar[list[str]] = ["User.Read", "Calendars.ReadWrite"]
+    NESTED_SYNC_ERR: ClassVar[str] = \
+        "OutlookClient sync methods cannot run inside an existing asyncio loop."
+    MISSING_CLIENT_ID_ERR: ClassVar[str] = \
+        "Missing AZURE_CLIENT_ID. Set it in .env or environment variables."
+    MISSING_AUTHORITY_ERR: ClassVar[str] = \
+        "Missing AZURE_AUTHORITY. Set it in .env or environment variables."
+
+    def __init__(
+        self,
+        service: GraphServiceClient | None = None,
+        *,
+        interactive: bool = False,
+    ) -> None:
          """Initialize the OutlookClient, handling authentication."""
-        # TODO: Implement authentication and service setup here
+         if service is not None:
+             self.service = service
+             return  # Skip auth if service is provided
+
+         client_id = self.CLIENT_ID
+         authority = self.AUTHORITY
+         if not client_id:
+             raise RuntimeError(self.MISSING_CLIENT_ID_ERR)
+         if not authority:
+             raise RuntimeError(self.MISSING_AUTHORITY_ERR)
+
+         auth = AuthManager(
+             client_id=client_id,
+             authority=authority,
+             scopes=self.SCOPES,
+             interactive=interactive,
+         )
+         self.service = auth.get_graph_client()
+
+
+    # Helper to run async Graph calls from sync interface methods.
+    def _run(self, coro: Coroutine[Any, Any, T]) -> T:
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = None
+        if loop and loop.is_running():
+            raise RuntimeError(self.NESTED_SYNC_ERR)
+        return asyncio.run(coro)
 
     def get_event(self, event_id: str) -> event.Event:
         """Retrieve a specific event by its ID.
