@@ -67,6 +67,7 @@ def test_client_create_event() -> None:
     )
     assert created_event.id == "new_event_id"
 
+
 def test_client_delete_event() -> None:
     """Verifies and documents the contract for the `delete_event` method."""
     # ARRANGE
