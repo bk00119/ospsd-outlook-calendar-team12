@@ -15,7 +15,7 @@ The project uses pytest markers to categorize tests based on their requirements 
 ### Environment-Specific Markers
 
 - `circleci`: Tests that can run in CI/CD environments without local credential files
-- `local_credentials`: Tests that require local `credentials.json` or `token.json` files
+- `local_credentials`: Tests that require local `.env` auth settings and/or cached MSAL tokens
 
 ## Running Tests
 
@@ -61,7 +61,7 @@ uv run pytest -m "not local_credentials"
 
 Tests marked with `@pytest.mark.circleci` can run in CI environments:
 
-- **Requirements**: Only environment variables (`AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`)
+- **Requirements**: Only environment variables (`AZURE_CLIENT_ID`, `AZURE_AUTHORITY`)
 - **What they test**:
   - Code syntax and imports
   - Factory function dependency injection
@@ -79,7 +79,7 @@ uv run pytest -m circleci --tb=short
 
 Tests marked with `@pytest.mark.local_credentials` require local files:
 
-- **Requirements**: `credentials.json` or `token.json` files
+- **Requirements**: `.env` with `AZURE_CLIENT_ID` and `AZURE_AUTHORITY` (plus a valid login/token cache)
 - **What they test**:
   - Real Outlook Calendar API connectivity
   - Interactive authentication flows
@@ -92,8 +92,7 @@ Set these environment variables in your CI environment:
 
 ```bash
 export AZURE_CLIENT_ID="your-azure-client-id"
-export AZURE_CLIENT_SECRET="your-azure-client-secret"
-export AZURE_TENANT_ID="your-tenant-id"
+export AZURE_AUTHORITY="https://login.microsoftonline.com/consumers"
 ```
 
 ## Authentication Modes
@@ -103,15 +102,15 @@ The application supports two authentication modes:
 ### Interactive Mode (`interactive=True`)
 
 - Launches browser for OAuth flow
-- Requires `credentials.json`
+- Requires environment-based auth config (for example, `AZURE_CLIENT_ID`, `AZURE_AUTHORITY`)
 - Used for initial setup and local development
 - **Not suitable for CI/CD**
 
 ### Non-Interactive Mode (`interactive=False`)
 
-- Uses environment variables or existing token files
-- Never launches browser or prompts for user input
-- **Required for CI/CD environments**
+- Uses existing token cache first
+- May still fall back to interactive auth if no valid cached token is available
+- **Preferred for CI/CD**, but CI should avoid real interactive auth flows
 - Fails fast with clear error messages when credentials are missing
 
 ## Test Examples
@@ -155,7 +154,7 @@ uv run pytest -k "auth" -v
 
 - Tests marked `circleci` pass
 - Tests marked `local_credentials` are skipped
-- No interactive authentication attempts
+- No interactive authentication attempts in CI test paths
 - Fast execution (no timeouts)
 
 ### CircleCI (without environment variables)
