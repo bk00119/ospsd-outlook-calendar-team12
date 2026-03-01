@@ -6,6 +6,7 @@ These tests use mocks to demonstrate how implementations should behave
 and serve as documentation for the expected API contracts.
 """
 
+from datetime import UTC, datetime
 from unittest.mock import Mock
 
 from calendar_client_api import Client, Event, EventPatch
@@ -46,10 +47,24 @@ def test_client_create_event() -> None:
     mock_client.create_event.return_value = mock_event
 
     # ACT
-    created_event = mock_client.create_event(event=mock_event)
+    start = datetime(2026, 3, 1, 10, 0, tzinfo=UTC)
+    end = datetime(2026, 3, 1, 11, 0, tzinfo=UTC)
+    created_event = mock_client.create_event(
+        title="Planning Session",
+        starts_at=start,
+        ends_at=end,
+        location="Room A",
+        description="Discuss roadmap.",
+    )
 
     # ASSERT
-    mock_client.create_event.assert_called_once_with(event=mock_event)
+    mock_client.create_event.assert_called_once_with(
+        title="Planning Session",
+        starts_at=start,
+        ends_at=end,
+        location="Room A",
+        description="Discuss roadmap.",
+    )
     assert created_event.id == "new_event_id"
 
 def test_client_delete_event() -> None:
@@ -84,4 +99,3 @@ def test_client_update_event() -> None:
     mock_client.update_event.assert_called_once_with(event_id="event-123", payload=mock_patch)
     assert updated_event.id == "event-123"
     assert updated_event.title == "second meeting"
-

@@ -1,6 +1,7 @@
 """Core calendar client contract definitions and factory placeholder."""
 
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 from calendar_client_api.event import Event, EventPatch
 
@@ -21,12 +22,15 @@ class Client(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def create_event(self, event: Event) -> Event:
-        """Persist a draft event and return the provider-created instance.
-
-        The input event provides creation fields (for example title/start/end),
-        while the returned event reflects provider-assigned fields such as ID.
-        """
+    def create_event(
+        self,
+        title: str,
+        starts_at: datetime,
+        ends_at: datetime,
+        location: str | None = None,
+        description: str | None = None,
+    ) -> Event:
+        """Create an event from explicit creation fields and return it."""
         raise NotImplementedError
 
     # TODO: Define additional abstract methods for calendar operations

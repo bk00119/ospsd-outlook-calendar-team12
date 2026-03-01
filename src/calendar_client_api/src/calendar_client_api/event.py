@@ -16,12 +16,6 @@ class Event(ABC):
 
     @property
     @abstractmethod
-    def calendar_id(self) -> str:
-        """Return the identifier of the calendar that owns this event."""
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
     def title(self) -> str:
         """Return the event title/summary."""
         raise NotImplementedError
@@ -73,7 +67,6 @@ class EventPatch:
     """A class used for partially updating event."""
 
     title: str | None = None
-    calendar_id: str | None = None
     starts_at: datetime | None = None
     ends_at: datetime | None = None
     location: str | None = None
