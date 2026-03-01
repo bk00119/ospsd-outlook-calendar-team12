@@ -189,9 +189,12 @@ class OutlookClient(calendar_client_api.Client):
             Exception: If the event cannot be deleted from the Outlook API.
 
         """
-        # TODO: implementation for deleting an event using the Outlook API
-        err_msg = "OutlookClient.delete_event is not yet implemented."
-        raise NotImplementedError(err_msg)
+        clean_event_id = event_id.strip()
+        if not clean_event_id:
+            msg = "event_id must be a non-empty string."
+            raise ValueError(msg)
+
+        self._run(self.service.me.events.by_event_id(clean_event_id).delete())
 
     def update_event(self, event_id: str, payload: event.EventPatch) -> event.Event:
         """Update an event by id in Outlook and return the updated event.
