@@ -189,23 +189,12 @@ class OutlookClient(calendar_client_api.Client):
             Exception: If the event cannot be deleted from the Outlook API.
 
         """
-        if not event_id or not event_id.strip():
+        clean_event_id = event_id.strip()
+        if not clean_event_id:
             msg = "event_id must be a non-empty string."
             raise ValueError(msg)
 
-        # Temporary placeholder until integration is implemented
-        # TODO: integrate with Outlook Graph API to delete the event once service setup is done
-        service = getattr(self, "service", None)
-        if service is None:
-            msg = "Outlook client not configured with a service instance."
-            raise RuntimeError(msg)
-
-        delete_function = getattr(service, "delete_event", None)
-        if delete_function is None:
-            msg = "The service instance does not have a delete_event method."
-            raise NotImplementedError(msg)
-
-        delete_function(event_id)
+        self._run(self.service.me.events.by_event_id(clean_event_id).delete())
 
     def update_event(self, event_id: str, payload: event.EventPatch) -> event.Event:
         """Update an event by id in Outlook and return the updated event.
