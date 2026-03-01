@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 from kiota_serialization_json.json_serialization_writer import JsonSerializationWriter
 from msgraph.graph_service_client import GraphServiceClient
 
-from .auth_manager import AuthManager
+from outlook_client_impl.auth_manager import AuthManager
 
 T = TypeVar("T")
 
