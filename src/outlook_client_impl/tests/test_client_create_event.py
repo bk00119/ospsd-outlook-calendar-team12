@@ -139,7 +139,6 @@ def test_create_event_raises_for_unsupported_service_shape() -> None:
 
 def test_create_event_raises_when_create_returns_none() -> None:
     """Raises when provider returns no create payload."""
-
     class _NoneEventsBuilder:
         async def post(self, payload: object) -> object:
             _ = payload
@@ -157,7 +156,6 @@ def test_create_event_raises_when_create_returns_none() -> None:
 
 def test_create_event_raises_when_payload_missing_id() -> None:
     """Raises when create payload has no valid event id."""
-
     class _NoIdEventsBuilder:
         async def post(self, payload: object) -> object:
             _ = payload
