@@ -259,12 +259,36 @@ def test_get_event_raises_if_called_with_running_event_loop(
         _fake_event_loop,
     )
 
-    with pytest.raises(RuntimeError, match="cannot run inside an existing asyncio loop"):
+    with pytest.raises(
+        RuntimeError,
+        match="cannot run inside an existing asyncio loop",
+    ):
         client.get_event("event-async-loop")
 
 
-def test_get_client_impl_returns_outlook_client() -> None:
+def test_get_client_impl_returns_outlook_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Factory returns an OutlookClient instance."""
+    fake_service = cast("GraphServiceClient", object())
+
+    monkeypatch.setattr(OutlookClient, "CLIENT_ID", "test-client-id")
+    monkeypatch.setattr(
+        OutlookClient,
+        "AUTHORITY",
+        "https://login.microsoftonline.com/consumers",
+    )
+
+    def _fake_get_graph_client(self: object) -> GraphServiceClient:
+        _ = self
+        return fake_service
+
+    monkeypatch.setattr(
+        "outlook_client_impl.outlook_impl.AuthManager.get_graph_client",
+        _fake_get_graph_client,
+    )
+
     client = get_client_impl(interactive=False)
 
     assert isinstance(client, OutlookClient)
+    assert client.service is fake_service
