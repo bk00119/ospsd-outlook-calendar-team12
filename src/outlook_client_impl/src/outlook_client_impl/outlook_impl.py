@@ -149,6 +149,17 @@ class OutlookClient(calendar_client_api.Client):
         result.time_zone = "UTC"
         return result
 
+    def _to_graph_datetime_model(self, value: datetime.datetime) -> DateTimeTimeZone:
+        if value.tzinfo:
+            normalized = value.astimezone(datetime.UTC)
+        else:
+            normalized = value.replace(tzinfo=datetime.UTC)
+
+        dtz = DateTimeTimeZone()
+        dtz.date_time = normalized.strftime("%Y-%m-%dT%H:%M:%S")
+        dtz.time_zone = "UTC"
+        return dtz
+
     def _build_create_payload(
         self,
         title: str,
@@ -188,6 +199,94 @@ class OutlookClient(calendar_client_api.Client):
             msg = "Created event payload did not include a valid id."
             raise RuntimeError(msg)
         return event_id.strip()
+
+    def _build_patch_event(self, payload: event.EventPatch) -> GraphEvent:
+        """Build a Microsoft Graph PATCH body from an EventPatch.
+
+        Notes:
+            - Only fields that are not None are included.
+            - start/end are serialized as UTC with timeZone="UTC".
+            - body is serialized as plain text (contentType="text").
+
+        Args:
+            payload: The partial update payload.
+
+        Returns:
+            A GraphEvent instance used as PATCH body.
+
+        """
+        ev = GraphEvent()
+        empty_payload = True
+
+        if payload.title and payload.title.strip():
+            ev.subject = payload.title.strip()
+            empty_payload = False
+
+        if payload.description and payload.description.strip():
+            b = ItemBody()
+            b.content_type = BodyType.Text
+            b.content = payload.description.strip()
+            ev.body = b
+            empty_payload = False
+
+        if payload.location and payload.location.strip():
+            loc = Location()
+            loc.display_name = payload.location.strip()
+            ev.location = loc
+            empty_payload = False
+
+        if payload.starts_at is not None:
+            ev.start = self._to_graph_datetime_model(payload.starts_at)
+            empty_payload = False
+
+        if payload.ends_at is not None:
+            ev.end = self._to_graph_datetime_model(payload.ends_at)
+            empty_payload = False
+
+        if empty_payload:
+            msg = "payload must update at least one field."
+            raise ValueError(msg)
+
+        return ev
+
+    def _patch_provider_event(
+        self,
+        *,
+        service: object,
+        event_id: str,
+        body: object,
+    ) -> object:
+        """Patch an event via Graph builder chain.
+
+        Supports:
+        - The Graph builder chain:
+          service.me.events.by_event_id(event_id).patch(body)
+          (or .update(body) depending on SDK generation)
+
+        Any coroutine/awaitable result will be executed via `_run`.
+        """
+        me_builder = getattr(service, "me", None)
+        events_builder = (
+            getattr(me_builder, "events", None) if me_builder is not None else None
+        )
+        by_event_id = getattr(events_builder, "by_event_id", None)
+        if not callable(by_event_id):
+            msg = "The service instance does not support event updates."
+            raise NotImplementedError(msg)
+
+        request_builder = cast("Callable[[str], object]", by_event_id)(event_id)
+
+        patch_method = getattr(request_builder, "patch", None)
+        update_method = getattr(request_builder, "update", None)
+        method = patch_method if callable(patch_method) else update_method
+
+        if not callable(method):
+            msg = "The Graph request builder does not expose patch() or update()."
+            raise NotImplementedError(msg)
+
+        result = cast("Callable[[object], object]", method)(body)
+        return self._run_maybe_awaitable(result)
+
 
     def get_event(self, event_id: str) -> event.Event:
         """Retrieve a specific event by its ID.
@@ -316,9 +415,31 @@ class OutlookClient(calendar_client_api.Client):
             Exception: If the updating fails for reasons like wrong event id.
 
         """
-        # TODO: integrate with Outlook Graph API to update the event
-        err_msg = "OutlookClient.update_event is not yet implemented."
-        raise NotImplementedError(err_msg)
+        clean_event_id = event_id.strip()
+        if not clean_event_id:
+            msg = "event_id must be a non-empty string."
+            raise ValueError(msg)
+
+        service = getattr(self, "service", None)
+        if service is None:
+            msg = "Outlook client not configured with a service instance."
+            raise RuntimeError(msg)
+
+        patch_event: GraphEvent = self._build_patch_event(payload)
+
+        updated_payload = self._patch_provider_event(
+            service=service,
+            event_id=clean_event_id,
+            body=patch_event,
+        )
+
+        # Graph docs specify PATCH can return 200 OK with the updated event.
+        # Prefer that payload to avoid an extra GET; fall back if provider returns None.
+        if updated_payload is not None:
+            raw_data = self._serialize_provider_payload(updated_payload)
+            return event.get_event(event_id=clean_event_id, raw_data=raw_data)
+
+        return self.get_event(clean_event_id)
 
 
 def get_client_impl(*, interactive: bool = False) -> calendar_client_api.Client:

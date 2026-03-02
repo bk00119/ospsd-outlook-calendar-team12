@@ -19,7 +19,12 @@ def test_outlook_client_delete_event_success() -> None:
 
     client = OutlookClient(service=service)
 
-    with patch.object(client, "_run", return_value=None) as run_mock:
+    def _fake_run(coro: Coroutine[Any, Any, Any]) -> None:
+        # Close the coroutine returned by AsyncMock.delete() to avoid
+        # "coroutine was never awaited" warnings.
+        coro.close()
+
+    with patch.object(client, "_run", side_effect=_fake_run) as run_mock:
         event_id = "test-event-id"
         client.delete_event(event_id)
 
