@@ -7,9 +7,9 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from calendar_client_api import event
-
 from outlook_client_impl.outlook_impl import OutlookClient
+
+from calendar_client_api import event
 
 
 @pytest.fixture

@@ -15,8 +15,6 @@ import os
 from collections.abc import Callable, Coroutine, Mapping
 from typing import Any, ClassVar, TypeVar, cast
 
-import calendar_client_api
-from calendar_client_api import event
 from dotenv import load_dotenv
 from kiota_serialization_json.json_serialization_writer import JsonSerializationWriter
 from msgraph.generated.models.body_type import BodyType
@@ -26,6 +24,8 @@ from msgraph.generated.models.item_body import ItemBody
 from msgraph.generated.models.location import Location
 from msgraph.graph_service_client import GraphServiceClient
 
+import calendar_client_api
+from calendar_client_api import event
 from outlook_client_impl.auth_manager import AuthManager
 
 T = TypeVar("T")
@@ -140,25 +140,15 @@ class OutlookClient(calendar_client_api.Client):
 
     def _to_graph_datetime(self, value: datetime.datetime) -> DateTimeTimeZone:
         """Convert a datetime to a Graph DateTimeTimeZone model."""
-        if value.tzinfo:
-            normalized = value.astimezone(datetime.UTC)
-        else:
-            normalized = value.replace(tzinfo=datetime.UTC)
+        normalized = (
+            value.astimezone(datetime.UTC)
+            if value.tzinfo
+            else value.replace(tzinfo=datetime.UTC)
+        )
         result = DateTimeTimeZone()
         result.date_time = normalized.strftime("%Y-%m-%dT%H:%M:%S")
         result.time_zone = "UTC"
         return result
-
-    def _to_graph_datetime_model(self, value: datetime.datetime) -> DateTimeTimeZone:
-        if value.tzinfo:
-            normalized = value.astimezone(datetime.UTC)
-        else:
-            normalized = value.replace(tzinfo=datetime.UTC)
-
-        dtz = DateTimeTimeZone()
-        dtz.date_time = normalized.strftime("%Y-%m-%dT%H:%M:%S")
-        dtz.time_zone = "UTC"
-        return dtz
 
     def _build_create_payload(
         self,
@@ -236,11 +226,11 @@ class OutlookClient(calendar_client_api.Client):
             empty_payload = False
 
         if payload.starts_at is not None:
-            ev.start = self._to_graph_datetime_model(payload.starts_at)
+            ev.start = self._to_graph_datetime(payload.starts_at)
             empty_payload = False
 
         if payload.ends_at is not None:
-            ev.end = self._to_graph_datetime_model(payload.ends_at)
+            ev.end = self._to_graph_datetime(payload.ends_at)
             empty_payload = False
 
         if empty_payload:
