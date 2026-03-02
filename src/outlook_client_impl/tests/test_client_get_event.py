@@ -7,7 +7,6 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
-
 from outlook_client_impl.outlook_impl import OutlookClient, get_client_impl
 
 if TYPE_CHECKING:

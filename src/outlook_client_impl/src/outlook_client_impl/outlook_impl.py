@@ -15,8 +15,6 @@ import os
 from collections.abc import Callable, Coroutine, Mapping
 from typing import Any, ClassVar, TypeVar, cast
 
-import calendar_client_api
-from calendar_client_api import event
 from dotenv import load_dotenv
 from kiota_serialization_json.json_serialization_writer import JsonSerializationWriter
 from msgraph.generated.models.body_type import BodyType
@@ -26,6 +24,8 @@ from msgraph.generated.models.item_body import ItemBody
 from msgraph.generated.models.location import Location
 from msgraph.graph_service_client import GraphServiceClient
 
+import calendar_client_api
+from calendar_client_api import event
 from outlook_client_impl.auth_manager import AuthManager
 
 T = TypeVar("T")
@@ -140,10 +140,11 @@ class OutlookClient(calendar_client_api.Client):
 
     def _to_graph_datetime(self, value: datetime.datetime) -> DateTimeTimeZone:
         """Convert a datetime to a Graph DateTimeTimeZone model."""
-        if value.tzinfo:
-            normalized = value.astimezone(datetime.UTC)
-        else:
-            normalized = value.replace(tzinfo=datetime.UTC)
+        normalized = (
+            value.astimezone(datetime.UTC)
+            if value.tzinfo
+            else value.replace(tzinfo=datetime.UTC)
+        )
         result = DateTimeTimeZone()
         result.date_time = normalized.strftime("%Y-%m-%dT%H:%M:%S")
         result.time_zone = "UTC"

@@ -5,7 +5,6 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from outlook_client_impl.outlook_impl import OutlookClient
 
 
