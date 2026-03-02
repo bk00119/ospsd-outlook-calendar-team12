@@ -19,6 +19,11 @@ import calendar_client_api
 from calendar_client_api import event
 from dotenv import load_dotenv
 from kiota_serialization_json.json_serialization_writer import JsonSerializationWriter
+from msgraph.generated.models.body_type import BodyType
+from msgraph.generated.models.date_time_time_zone import DateTimeTimeZone
+from msgraph.generated.models.event import Event as GraphEvent
+from msgraph.generated.models.item_body import ItemBody
+from msgraph.generated.models.location import Location
 from msgraph.graph_service_client import GraphServiceClient
 
 from outlook_client_impl.auth_manager import AuthManager
@@ -133,16 +138,16 @@ class OutlookClient(calendar_client_api.Client):
             return self._run(_await_payload())
         return payload
 
-    def _to_graph_datetime(self, value: datetime.datetime) -> dict[str, str]:
-        """Convert a datetime to Graph's DateTimeTimeZone-like payload."""
+    def _to_graph_datetime(self, value: datetime.datetime) -> DateTimeTimeZone:
+        """Convert a datetime to a Graph DateTimeTimeZone model."""
         if value.tzinfo:
             normalized = value.astimezone(datetime.UTC)
         else:
             normalized = value.replace(tzinfo=datetime.UTC)
-        return {
-            "dateTime": normalized.strftime("%Y-%m-%dT%H:%M:%S"),
-            "timeZone": "UTC",
-        }
+        result = DateTimeTimeZone()
+        result.date_time = normalized.strftime("%Y-%m-%dT%H:%M:%S")
+        result.time_zone = "UTC"
+        return result
 
     def _build_create_payload(
         self,
@@ -151,17 +156,19 @@ class OutlookClient(calendar_client_api.Client):
         ends_at: datetime.datetime,
         location: str | None,
         description: str | None,
-    ) -> dict[str, object]:
-        """Build minimal payload for Graph event creation."""
-        payload: dict[str, object] = {
-            "subject": title,
-            "start": self._to_graph_datetime(starts_at),
-            "end": self._to_graph_datetime(ends_at),
-        }
+    ) -> GraphEvent:
+        """Build minimal Graph event model for event creation."""
+        payload = GraphEvent()
+        payload.subject = title
+        payload.start = self._to_graph_datetime(starts_at)
+        payload.end = self._to_graph_datetime(ends_at)
         if location and location.strip():
-            payload["location"] = {"displayName": location.strip()}
+            payload.location = Location()
+            payload.location.display_name = location.strip()
         if description and description.strip():
-            payload["body"] = {"contentType": "text", "content": description.strip()}
+            payload.body = ItemBody()
+            payload.body.content_type = BodyType.Text
+            payload.body.content = description.strip()
         return payload
 
     def _extract_event_id(self, created_payload: object, raw_data: str) -> str:

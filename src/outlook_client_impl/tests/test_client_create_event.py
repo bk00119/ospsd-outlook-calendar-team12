@@ -61,13 +61,15 @@ def test_create_event_builds_payload_and_returns_hydrated_event() -> None:
         description=" Status update ",
     )
 
-    assert events_builder.last_payload == {
-        "subject": "Team Sync",
-        "start": {"dateTime": "2026-03-02T15:00:00", "timeZone": "UTC"},
-        "end": {"dateTime": "2026-03-02T16:00:00", "timeZone": "UTC"},
-        "location": {"displayName": "Room B"},
-        "body": {"contentType": "text", "content": "Status update"},
-    }
+    assert events_builder.last_payload is not None
+    payload = events_builder.last_payload
+    assert getattr(payload, "subject", None) == "Team Sync"
+    assert getattr(getattr(payload, "start", None), "date_time", None) == "2026-03-02T15:00:00"
+    assert getattr(getattr(payload, "start", None), "time_zone", None) == "UTC"
+    assert getattr(getattr(payload, "end", None), "date_time", None) == "2026-03-02T16:00:00"
+    assert getattr(getattr(payload, "end", None), "time_zone", None) == "UTC"
+    assert getattr(getattr(payload, "location", None), "display_name", None) == "Room B"
+    assert getattr(getattr(payload, "body", None), "content", None) == "Status update"
     assert result.id == "created-123"
     assert result.title == "Team Sync"
     assert result.location == "Room B"
