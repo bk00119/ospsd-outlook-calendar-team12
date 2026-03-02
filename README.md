@@ -1,5 +1,10 @@
 # Team 12: Outlook (Calendar)
 
+[![CircleCI](https://circleci.com/gh/bk00119/ospsd-outlook-calendar-team12.svg?style=shield)](https://circleci.com/gh/bk00119/ospsd-outlook-calendar-team12)
+[![Coverage](https://img.shields.io/badge/coverage-85%2B%25-brightgreen)](https://circleci.com/gh/bk00119/ospsd-outlook-calendar-team12)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+
 ## Team Members
 
 - Brian Kim (hk2994)
@@ -62,9 +67,15 @@ OSPSD-OUTLOOK-CALENDAR-TEAM12/
     cd <repo-name>
     ```
 
-3.  **TODO: Instructions on setting up credentials**
-    
-    *Double check below workflow*
+3.  **Set Up Azure Credentials:**
+    - Register an application in [Azure Portal](https://portal.azure.com/) with `Calendars.ReadWrite` and `User.Read` delegated permissions.
+    - Create a `.env` file in the project root with:
+        ```bash
+        AZURE_CLIENT_ID="your-azure-client-id"
+        AZURE_AUTHORITY="https://login.microsoftonline.com/consumers"
+        ```
+    - For CI/CD environments, set these as environment variables directly.
+    - **Important:** `.env` and `.auth/` contain secrets and are ignored by `.gitignore`.
 
 4.  **Create and Sync the Virtual Environment:**
     This single command creates a `.venv` folder and installs all packages (including workspace members and development tools) defined in `uv.lock`.
@@ -80,4 +91,50 @@ OSPSD-OUTLOOK-CALENDAR-TEAM12/
     .venv\Scripts\Activate.ps1
     ```
 
-# TODO: Finish documentation after completing all requirements
+## Running the Toolchain
+
+- **Linting & Formatting (Ruff):**
+    ```bash
+    # Check for issues
+    uv run ruff check .
+    # Automatically fix issues
+    uv run ruff check . --fix
+    # Format
+    uv run ruff format .
+    ```
+
+- **Static Type Checking (MyPy):**
+    ```bash
+    uv run mypy src/ 
+    ```
+
+- **Testing (Pytest):**
+    ```bash
+    # All tests
+    uv run pytest
+
+    # Unit tests only (fast, no credentials needed)
+    uv run pytest src/
+
+    # Run integration tests
+    uv run pytest -m integration
+
+    # Run end to end tests
+    uv run pytest -m e2e
+
+    # With coverage report
+    uv run pytest --cov=src --cov-report=term-missing
+    ```
+
+- **Documentation (MkDocs):**
+    ```bash
+    uv run mkdocs serve
+    ```
+    Open your browser to `http://127.0.0.1:8000` to view the site.
+
+## Continuous Integration
+
+The project uses CircleCI (`.circleci/config.yml`) with two workflows:
+
+- **All Branches**: Build, lint, unit tests, and CI-compatible integration tests
+- **Main/Develop**: Additional integration tests with real Microsoft Graph API calls using credentials from the `outlook-client` CircleCI context
