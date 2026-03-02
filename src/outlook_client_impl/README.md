@@ -45,12 +45,16 @@ Implements the `calendar_client_api.Client` abstract base class.
 #### Methods
 
 - `create_event(title: str, starts_at: datetime, ends_at: datetime, location: str | None = None, description: str | None = None) -> Event`
-  - Creates events through `me.events.post(...)`.
+  - Creates a new Outlook Calendar event through `me.events.post(...)`.
   - Uses typed Graph models (`Event`, `DateTimeTimeZone`, `ItemBody`, `Location`) for the request body.
 - `get_event(event_id: str) -> Event`
+  - Fetches a single event by ID and returns it as an `OutlookCalendarEvent`.
 - `list_events(*, start=None, end=None, types=None) -> list[Event]`
+  - Returns events from Outlook Calendar with optional filtering by time range and event type.
 - `update_event(event_id: str, payload: EventPatch) -> Event`
+  - Applies partial updates to an existing event and returns the updated event.
 - `delete_event(event_id: str) -> None`
+  - Deletes an event from Outlook Calendar by ID.
 
 ### Factory Function
 
