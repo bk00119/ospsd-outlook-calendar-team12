@@ -1,6 +1,5 @@
 # Team 12: Outlook (Calendar)
 
-[![CircleCI](https://circleci.com/gh/bk00119/ospsd-outlook-calendar-team12.svg?style=shield)]([https://circleci.com/gh/bk00119/ospsd-outlook-calendar-team12](https://app.circleci.com/pipelines/github/bk00119/ospsd-outlook-calendar-team12))
 [![Coverage](https://img.shields.io/badge/coverage-85%2B%25-brightgreen)](https://circleci.com/gh/bk00119/ospsd-outlook-calendar-team12)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
