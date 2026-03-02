@@ -320,10 +320,94 @@ class OutlookClient(calendar_client_api.Client):
         raw_data = self._serialize_provider_payload(payload)
         return event.get_event(event_id=clean_event_id, raw_data=raw_data)
 
-    def list_events(self) -> list[event.Event]:
-        """Return a list of calendar events from Outlook."""
-        err_msg = "OutlookClient.list_events is not yet implemented."
-        raise NotImplementedError(err_msg)
+    def _fetch_raw_items(self) -> list[object]:
+        """Fetch raw event items from the Graph API.
+
+        Raises:
+            RuntimeError: If the client has no configured service.
+            NotImplementedError: If the service does not support event listing.
+
+        """
+        service = getattr(self, "service", None)
+        if service is None:
+            msg = "Outlook client not configured with a service instance."
+            raise RuntimeError(msg)
+
+        me_builder = getattr(service, "me", None)
+        events_builder = (
+            getattr(me_builder, "events", None) if me_builder is not None else None
+        )
+        if events_builder is None:
+            msg = "The service instance does not support event listing."
+            raise NotImplementedError(msg)
+
+        get_method = getattr(events_builder, "get", None)
+        if not callable(get_method):
+            msg = "The Graph events builder does not expose get()."
+            raise NotImplementedError(msg)
+
+        response = cast("Callable[[], object]", get_method)()
+        if inspect.iscoroutine(response):
+            result = self._run(cast("Coroutine[Any, Any, object]", response))
+        elif inspect.isawaitable(response):
+            async def _await_list() -> object:
+                return await cast("Any", response)
+
+            result = self._run(_await_list())
+        else:
+            result = response
+
+        return cast("list[object]", getattr(result, "value", None) or [])
+
+    def list_events(
+        self,
+        *,
+        start: datetime.datetime | None = None,
+        end: datetime.datetime | None = None,
+        types: list[str] | None = None,
+    ) -> list[event.Event]:
+        """Return a filtered list of calendar events from Outlook.
+
+        Args:
+            start: If provided, only return events that start at or after this time.
+            end: If provided, only return events that end at or before this time.
+            types: If provided, only return events whose type is in this list
+                   (e.g. ``["singleInstance", "occurrence"]``).
+
+        Returns:
+            A list of :class:`Event` instances matching the given criteria.
+
+        Raises:
+            RuntimeError: If the client has no configured service.
+
+        """
+        raw_items = self._fetch_raw_items()
+
+        results: list[event.Event] = []
+        for item in raw_items:
+            if types is not None:
+                if isinstance(item, Mapping):
+                    item_type = str(cast("Mapping[str, object]", item).get("type", "") or "")
+                else:
+                    item_type = str(getattr(item, "type", None) or "")
+                if item_type not in types:
+                    continue
+
+            if isinstance(item, Mapping):
+                item_id = str(cast("Mapping[str, object]", item).get("id", "") or "")
+            else:
+                item_id = str(getattr(item, "id", None) or "")
+
+            raw_data = self._serialize_provider_payload(item)
+            ev = event.get_event(event_id=item_id, raw_data=raw_data)
+
+            if start is not None and ev.starts_at < start:
+                continue
+            if end is not None and ev.ends_at > end:
+                continue
+
+            results.append(ev)
+        return results
 
     def create_event(
         self,
@@ -440,6 +524,7 @@ class OutlookClient(calendar_client_api.Client):
             return event.get_event(event_id=clean_event_id, raw_data=raw_data)
 
         return self.get_event(clean_event_id)
+
 
 
 def get_client_impl(*, interactive: bool = False) -> calendar_client_api.Client:

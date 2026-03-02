@@ -17,8 +17,25 @@ class Client(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def list_events(self) -> list[Event]:
-        """Return a list of calendar events."""
+    def list_events(
+        self,
+        *,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        types: list[str] | None = None,
+    ) -> list[Event]:
+        """Return a list of calendar events, with optional filters.
+
+        Args:
+            start: If provided, only return events that start at or after this time.
+            end: If provided, only return events that end at or before this time.
+            types: If provided, only return events whose type is in this list
+                   (e.g. ``["singleInstance", "occurrence"]``).
+
+        Returns:
+            A list of :class:`Event` instances matching the given criteria.
+
+        """
         raise NotImplementedError
 
     @abstractmethod
