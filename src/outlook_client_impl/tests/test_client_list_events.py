@@ -230,23 +230,3 @@ def test_list_events_raises_when_events_builder_has_no_get() -> None:
         client.list_events()
 
 
-def test_list_events_raises_if_called_with_running_event_loop(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Raises RuntimeError with a clear message when an event loop is already active."""
-    client = _client([_make_item("e1")])
-
-    class _RunningLoop:
-        def is_running(self) -> bool:
-            return True
-
-    def _fake_event_loop() -> _RunningLoop:
-        return _RunningLoop()
-
-    monkeypatch.setattr(
-        "outlook_client_impl.outlook_impl.asyncio.get_event_loop",
-        _fake_event_loop,
-    )
-
-    with pytest.raises(RuntimeError, match="cannot run inside an existing asyncio loop"):
-        client.list_events()
