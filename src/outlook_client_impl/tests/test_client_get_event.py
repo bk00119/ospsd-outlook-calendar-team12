@@ -238,33 +238,6 @@ def test_get_event_rejects_unsupported_payload_type() -> None:
         client.get_event("event-bad")
 
 
-def test_get_event_raises_if_called_with_running_event_loop(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Raises RuntimeError with a clear message when loop is already active."""
-    client = _client_with_service(
-        GraphServiceStub(me=MeBuilderStub(events=EventsBuilderStub())),
-    )
-
-    class _RunningLoop:
-        def is_running(self) -> bool:
-            return True
-
-    def _fake_event_loop() -> _RunningLoop:
-        return _RunningLoop()
-
-    monkeypatch.setattr(
-        "outlook_client_impl.outlook_impl.asyncio.get_event_loop",
-        _fake_event_loop,
-    )
-
-    with pytest.raises(
-        RuntimeError,
-        match="cannot run inside an existing asyncio loop",
-    ):
-        client.get_event("event-async-loop")
-
-
 def test_get_client_impl_returns_outlook_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

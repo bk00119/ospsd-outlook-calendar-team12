@@ -36,6 +36,34 @@ load_dotenv()
 class OutlookClient(calendar_client_api.Client):
     """Concrete implementation of the Client abstraction using Outlook API."""
 
+    def _extract_item_id(self, item: object) -> str:
+        """Extract an event id from either a mapping payload or a Graph SDK model."""
+        if isinstance(item, Mapping):
+            return str(cast("Mapping[str, object]", item).get("id", "") or "")
+        return str(getattr(item, "id", None) or "")
+
+    def _extract_item_type(self, item: object) -> str:
+        """Extract an event type string from either a mapping payload or a Graph SDK model."""
+        if isinstance(item, Mapping):
+            item_type_obj: object = cast("Mapping[str, object]", item).get("type", "") or ""
+        else:
+            item_type_obj = getattr(item, "type", None)
+            if item_type_obj is None:
+                # Some generated models expose this as `type_` to avoid keyword clashes.
+                item_type_obj = getattr(item, "type_", None)
+
+        if isinstance(item_type_obj, str):
+            return item_type_obj
+
+        # Enum-like generated models may expose `.value` or `.name`.
+        value = getattr(item_type_obj, "value", None)
+        if isinstance(value, str):
+            return value
+
+        name = getattr(item_type_obj, "name", None)
+        return name if isinstance(name, str) else str(item_type_obj or "")
+
+
     CLIENT_ID: ClassVar[str | None] = os.environ.get("AZURE_CLIENT_ID")
     AUTHORITY: ClassVar[str | None] = os.environ.get("AZURE_AUTHORITY")
     SCOPES: ClassVar[list[str]] = ["User.Read", "Calendars.ReadWrite"]
@@ -75,14 +103,36 @@ class OutlookClient(calendar_client_api.Client):
 
     # Helper to run async Graph calls from sync interface methods.
     def _run(self, coro: Coroutine[Any, Any, T]) -> T:
+        """Run an async coroutine from sync code using a dedicated, reusable event loop.
+
+        The Microsoft Graph SDK stack (kiota + httpx) may create async transports that become
+        bound to the event loop used on first request. If we call `asyncio.run()` repeatedly,
+        each call creates and closes a new loop, which can break subsequent requests with
+        `RuntimeError: Event loop is closed`.
+
+        We therefore keep a per-client event loop alive for the lifetime of this client.
+        """
         try:
-            loop = asyncio.get_event_loop()
+            running_loop = asyncio.get_running_loop()
         except RuntimeError:
-            loop = None
-        if loop and loop.is_running():
+            running_loop = None
+
+        if running_loop is not None and running_loop.is_running():
             coro.close()
             raise RuntimeError(self.NESTED_SYNC_ERR)
-        return asyncio.run(coro)
+
+        loop = getattr(self, "_loop", None)
+        if loop is None or loop.is_closed():
+            loop = asyncio.new_event_loop()
+            self._loop = loop
+
+        return loop.run_until_complete(coro)
+
+    def close(self) -> None:
+        """Close the internal event loop used by this client (best effort)."""
+        loop = getattr(self, "_loop", None)
+        if loop is not None and not loop.is_closed():
+            loop.close()
 
     def _fetch_provider_payload(self, *, service: object, event_id: str) -> object:
         """Fetch payload from either direct service method or Graph builder chain."""
@@ -375,19 +425,10 @@ class OutlookClient(calendar_client_api.Client):
 
         results: list[event.Event] = []
         for item in raw_items:
-            if types is not None:
-                if isinstance(item, Mapping):
-                    item_type = str(cast("Mapping[str, object]", item).get("type", "") or "")
-                else:
-                    item_type = str(getattr(item, "type", None) or "")
-                if item_type not in types:
-                    continue
+            if types is not None and self._extract_item_type(item) not in types:
+                continue
 
-            if isinstance(item, Mapping):
-                item_id = str(cast("Mapping[str, object]", item).get("id", "") or "")
-            else:
-                item_id = str(getattr(item, "id", None) or "")
-
+            item_id = self._extract_item_id(item)
             raw_data = self._serialize_provider_payload(item)
             ev = event.get_event(event_id=item_id, raw_data=raw_data)
 
