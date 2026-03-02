@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 from kiota_serialization_json.json_serialization_writer import JsonSerializationWriter
 from msgraph.graph_service_client import GraphServiceClient
 
-from .auth_manager import AuthManager
+from outlook_client_impl.auth_manager import AuthManager
 
 T = TypeVar("T")
 
@@ -102,14 +102,7 @@ class OutlookClient(calendar_client_api.Client):
             raise NotImplementedError(msg)
 
         payload = cast("Callable[[], object]", get_method)()
-        if inspect.iscoroutine(payload):
-            return self._run(cast("Coroutine[Any, Any, object]", payload))
-        if inspect.isawaitable(payload):
-            async def _await_payload() -> object:
-                return await cast("Any", payload)
-
-            return self._run(_await_payload())
-        return payload
+        return self._run_maybe_awaitable(payload)
 
     def _serialize_provider_payload(self, payload: object) -> str:
         """Serialize provider payload into JSON string expected by event factory."""
@@ -128,6 +121,66 @@ class OutlookClient(calendar_client_api.Client):
 
         msg = "Event payload must be JSON string, bytes, or mapping."
         raise TypeError(msg)
+
+    def _run_maybe_awaitable(self, payload: object) -> object:
+        """Resolve coroutine/awaitable values and return plain payload."""
+        if inspect.iscoroutine(payload):
+            return self._run(cast("Coroutine[Any, Any, object]", payload))
+        if inspect.isawaitable(payload):
+            async def _await_payload() -> object:
+                return await cast("Any", payload)
+
+            return self._run(_await_payload())
+        return payload
+
+    def _to_graph_datetime(self, value: datetime.datetime) -> dict[str, str]:
+        """Convert a datetime to Graph's DateTimeTimeZone-like payload."""
+        if value.tzinfo:
+            normalized = value.astimezone(datetime.UTC)
+        else:
+            normalized = value.replace(tzinfo=datetime.UTC)
+        return {
+            "dateTime": normalized.strftime("%Y-%m-%dT%H:%M:%S"),
+            "timeZone": "UTC",
+        }
+
+    def _build_create_payload(
+        self,
+        title: str,
+        starts_at: datetime.datetime,
+        ends_at: datetime.datetime,
+        location: str | None,
+        description: str | None,
+    ) -> dict[str, object]:
+        """Build minimal payload for Graph event creation."""
+        payload: dict[str, object] = {
+            "subject": title,
+            "start": self._to_graph_datetime(starts_at),
+            "end": self._to_graph_datetime(ends_at),
+        }
+        if location and location.strip():
+            payload["location"] = {"displayName": location.strip()}
+        if description and description.strip():
+            payload["body"] = {"contentType": "text", "content": description.strip()}
+        return payload
+
+    def _extract_event_id(self, created_payload: object, raw_data: str) -> str:
+        """Extract created event id from payload or serialized JSON."""
+        event_id: object | None = getattr(created_payload, "id", None)
+        if isinstance(created_payload, Mapping):
+            event_id = cast("Mapping[str, object]", created_payload).get("id")
+        if event_id is None:
+            try:
+                parsed_raw = json.loads(raw_data)
+            except json.JSONDecodeError:
+                parsed_raw = {}
+            if isinstance(parsed_raw, Mapping):
+                event_id = cast("Mapping[str, object]", parsed_raw).get("id")
+
+        if not isinstance(event_id, str) or not event_id.strip():
+            msg = "Created event payload did not include a valid id."
+            raise RuntimeError(msg)
+        return event_id.strip()
 
     def get_event(self, event_id: str) -> event.Event:
         """Retrieve a specific event by its ID.
@@ -250,19 +303,63 @@ class OutlookClient(calendar_client_api.Client):
             results.append(ev)
         return results
 
-    def create_event(self, event_data: event.Event) -> event.Event:
+    def create_event(
+        self,
+        title: str,
+        starts_at: datetime.datetime,
+        ends_at: datetime.datetime,
+        location: str | None = None,
+        description: str | None = None,
+    ) -> event.Event:
         """Create a new event in Outlook and return the created event.
 
         Args:
-            event_data: The event data to persist to Outlook.
+            title: Event title.
+            starts_at: Event start datetime.
+            ends_at: Event end datetime.
+            location: Optional location.
+            description: Optional description.
 
         Returns:
             An Event reflecting the created resource.
 
         """
-        # TODO: integrate with Outlook Graph API to create the event
-        err_msg = "OutlookClient.create_event is not yet implemented."
-        raise NotImplementedError(err_msg)
+        clean_title = title.strip()
+        if not clean_title:
+            msg = "title must be a non-empty string."
+            raise ValueError(msg)
+        if ends_at <= starts_at:
+            msg = "ends_at must be after starts_at."
+            raise ValueError(msg)
+
+        service = getattr(self, "service", None)
+        if service is None:
+            msg = "Outlook client not configured with a service instance."
+            raise RuntimeError(msg)
+
+        me_builder = getattr(service, "me", None)
+        events_builder = getattr(me_builder, "events", None) if me_builder is not None else None
+        post_method = getattr(events_builder, "post", None)
+        if not callable(post_method):
+            msg = "The service instance does not support event creation."
+            raise NotImplementedError(msg)
+
+        payload = self._build_create_payload(
+            clean_title,
+            starts_at,
+            ends_at,
+            location,
+            description,
+        )
+
+        created_payload = self._run_maybe_awaitable(post_method(payload))
+        if created_payload is None:
+            msg = "Outlook event creation returned no payload."
+            raise RuntimeError(msg)
+
+        raw_data = self._serialize_provider_payload(created_payload)
+        created_event_id = self._extract_event_id(created_payload, raw_data)
+        return event.get_event(event_id=created_event_id, raw_data=raw_data)
 
     def delete_event(self, event_id: str) -> None:
         """Delete a specific event by its ID.
@@ -274,9 +371,12 @@ class OutlookClient(calendar_client_api.Client):
             Exception: If the event cannot be deleted from the Outlook API.
 
         """
-        # TODO: implementation for deleting an event using the Outlook API
-        err_msg = "OutlookClient.delete_event is not yet implemented."
-        raise NotImplementedError(err_msg)
+        clean_event_id = event_id.strip()
+        if not clean_event_id:
+            msg = "event_id must be a non-empty string."
+            raise ValueError(msg)
+
+        self._run(self.service.me.events.by_event_id(clean_event_id).delete())
 
     def update_event(self, event_id: str, payload: event.EventPatch) -> event.Event:
         """Update an event by id in Outlook and return the updated event.

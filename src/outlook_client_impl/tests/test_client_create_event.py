@@ -1,19 +1,170 @@
-"""Contract-style test for OutlookClient.create_event."""
+"""Unit tests for OutlookClient.create_event."""
 
-from unittest.mock import Mock
+from __future__ import annotations
 
-from calendar_client_api import event as event_contract
+from datetime import UTC, datetime
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, cast
+
+import pytest
 
 from outlook_client_impl.outlook_impl import OutlookClient
 
+if TYPE_CHECKING:
+    from msgraph.graph_service_client import GraphServiceClient
 
-def test_outlook_client_create_event() -> None:
-    """Verifies the Outlook client create_event call contract."""
-    mock_event = Mock(spec=event_contract.Event)
-    mock_client = Mock(spec=OutlookClient)
-    mock_client.create_event.return_value = mock_event
 
-    created_event = mock_client.create_event(event_data=mock_event)
+class AsyncEventsBuilderStub:
+    """Graph events request-builder stub with async post()."""
 
-    mock_client.create_event.assert_called_once_with(event_data=mock_event)
-    assert created_event is mock_event
+    def __init__(self) -> None:
+        """Track the last payload passed to post()."""
+        self.last_payload: object | None = None
+
+    async def post(self, payload: object) -> object:
+        """Capture payload and return a created-event-like object."""
+        self.last_payload = payload
+        return {
+            "id": "created-123",
+            "subject": "Team Sync",
+            "start": {"dateTime": "2026-03-02T15:00:00", "timeZone": "UTC"},
+            "end": {"dateTime": "2026-03-02T16:00:00", "timeZone": "UTC"},
+            "location": {"displayName": "Room B"},
+            "body": {"content": "Status update"},
+        }
+
+
+class SyncEventsBuilderStub:
+    """Graph events request-builder stub with sync post()."""
+
+    def post(self, payload: object) -> object:
+        """Return a synchronous created-event-like object."""
+        _ = payload
+        return {"id": "created-sync-1", "subject": "Sync Builder Event"}
+
+
+def _client_with_events_builder(events_builder: object) -> OutlookClient:
+    service = SimpleNamespace(me=SimpleNamespace(events=events_builder))
+    return OutlookClient(service=cast("GraphServiceClient", service))
+
+
+def test_create_event_builds_payload_and_returns_hydrated_event() -> None:
+    """Builds Graph payload and returns hydrated Event."""
+    events_builder = AsyncEventsBuilderStub()
+    client = _client_with_events_builder(events_builder)
+
+    result = client.create_event(
+        title="  Team Sync  ",
+        starts_at=datetime(2026, 3, 2, 15, 0, tzinfo=UTC),
+        ends_at=datetime(2026, 3, 2, 16, 0, tzinfo=UTC),
+        location=" Room B ",
+        description=" Status update ",
+    )
+
+    assert events_builder.last_payload == {
+        "subject": "Team Sync",
+        "start": {"dateTime": "2026-03-02T15:00:00", "timeZone": "UTC"},
+        "end": {"dateTime": "2026-03-02T16:00:00", "timeZone": "UTC"},
+        "location": {"displayName": "Room B"},
+        "body": {"contentType": "text", "content": "Status update"},
+    }
+    assert result.id == "created-123"
+    assert result.title == "Team Sync"
+    assert result.location == "Room B"
+
+
+def test_create_event_supports_sync_post_result() -> None:
+    """Accepts synchronous SDK-style post() responses."""
+    client = _client_with_events_builder(SyncEventsBuilderStub())
+
+    result = client.create_event(
+        title="Sync Builder Event",
+        starts_at=datetime(2026, 3, 2, 18, 0, tzinfo=UTC),
+        ends_at=datetime(2026, 3, 2, 19, 0, tzinfo=UTC),
+    )
+
+    assert result.id == "created-sync-1"
+    assert result.title == "Sync Builder Event"
+
+
+@pytest.mark.parametrize("title", ["", "   "])
+def test_create_event_rejects_empty_title(title: str) -> None:
+    """Rejects empty or whitespace-only title values."""
+    client = _client_with_events_builder(AsyncEventsBuilderStub())
+
+    with pytest.raises(ValueError, match="title must be a non-empty string"):
+        client.create_event(
+            title=title,
+            starts_at=datetime(2026, 3, 2, 15, 0, tzinfo=UTC),
+            ends_at=datetime(2026, 3, 2, 16, 0, tzinfo=UTC),
+        )
+
+
+def test_create_event_rejects_invalid_time_range() -> None:
+    """Rejects events where ends_at is not after starts_at."""
+    client = _client_with_events_builder(AsyncEventsBuilderStub())
+
+    with pytest.raises(ValueError, match="must be after"):
+        client.create_event(
+            title="Team Sync",
+            starts_at=datetime(2026, 3, 2, 15, 0, tzinfo=UTC),
+            ends_at=datetime(2026, 3, 2, 15, 0, tzinfo=UTC),
+        )
+
+
+def test_create_event_raises_when_service_missing() -> None:
+    """Raises when OutlookClient has no configured service."""
+    client = object.__new__(OutlookClient)
+
+    with pytest.raises(RuntimeError, match="not configured"):
+        client.create_event(
+            title="Team Sync",
+            starts_at=datetime(2026, 3, 2, 15, 0, tzinfo=UTC),
+            ends_at=datetime(2026, 3, 2, 16, 0, tzinfo=UTC),
+        )
+
+
+def test_create_event_raises_for_unsupported_service_shape() -> None:
+    """Raises when service lacks me.events.post."""
+    client = OutlookClient(service=cast("GraphServiceClient", object()))
+
+    with pytest.raises(NotImplementedError, match="does not support event creation"):
+        client.create_event(
+            title="Team Sync",
+            starts_at=datetime(2026, 3, 2, 15, 0, tzinfo=UTC),
+            ends_at=datetime(2026, 3, 2, 16, 0, tzinfo=UTC),
+        )
+
+
+def test_create_event_raises_when_create_returns_none() -> None:
+    """Raises when provider returns no create payload."""
+    class _NoneEventsBuilder:
+        async def post(self, payload: object) -> object:
+            _ = payload
+            return None
+
+    client = _client_with_events_builder(_NoneEventsBuilder())
+
+    with pytest.raises(RuntimeError, match="returned no payload"):
+        client.create_event(
+            title="Team Sync",
+            starts_at=datetime(2026, 3, 2, 15, 0, tzinfo=UTC),
+            ends_at=datetime(2026, 3, 2, 16, 0, tzinfo=UTC),
+        )
+
+
+def test_create_event_raises_when_payload_missing_id() -> None:
+    """Raises when create payload has no valid event id."""
+    class _NoIdEventsBuilder:
+        async def post(self, payload: object) -> object:
+            _ = payload
+            return {"subject": "Missing Id"}
+
+    client = _client_with_events_builder(_NoIdEventsBuilder())
+
+    with pytest.raises(RuntimeError, match="valid id"):
+        client.create_event(
+            title="Team Sync",
+            starts_at=datetime(2026, 3, 2, 15, 0, tzinfo=UTC),
+            ends_at=datetime(2026, 3, 2, 16, 0, tzinfo=UTC),
+        )
