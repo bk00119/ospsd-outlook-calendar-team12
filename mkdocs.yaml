@@ -38,6 +38,7 @@ plugins:
           paths:
             - src/calendar_client_api/src
             - src/outlook_client_impl/src
+            - src/outlook_client_service/src
           options:
             show_source: false
             docstring_section_style: spacy
