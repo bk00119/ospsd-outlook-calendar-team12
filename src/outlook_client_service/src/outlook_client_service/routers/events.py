@@ -65,7 +65,6 @@ def update_event(
     try:
         updated_event = client.update_event(event_id=event_id, payload=patch)
     except Exception as e:
-        print(e)
         raise HTTPException(status_code=HTTPStatus.BAD_GATEWAY, detail=f"Failed to update event: {e}") from e
     return _to_event_response(updated_event)
 
