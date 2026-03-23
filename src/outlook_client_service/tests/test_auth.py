@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from http import HTTPStatus
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -14,6 +14,7 @@ EXPIRES_IN_LONG = 3600
 EXPIRES_IN_SHORT = 1800
 EXPECTED_EXPIRES_AT_LONG = FIXED_NOW + EXPIRES_IN_LONG
 EXPECTED_EXPIRES_AT_SHORT = FIXED_NOW + EXPIRES_IN_SHORT
+REFRESH_BUFFER_SECONDS = 60
 
 
 @dataclass
@@ -195,37 +196,118 @@ class TestRefreshAccessToken:
     @patch("outlook_client_service.routers.auth.requests.post")
     def test_refresh_access_token_raises_when_refresh_token_missing(
         self,
-        mock_post: object,
+        mock_post: Mock,
         request_with_session: Request,
     ) -> None:
         """Raise an HTTP exception when refresh token is missing."""
+        with pytest.raises(HTTPException) as exc_info:
+            auth.refresh_access_token(request_with_session)
+
+        assert exc_info.value.status_code == HTTPStatus.UNAUTHORIZED
+        assert "Missing refresh token" in exc_info.value.detail
+        mock_post.assert_not_called()
 
     @patch("outlook_client_service.routers.auth.requests.post")
     def test_refresh_access_token_updates_session_and_returns_access_token(
         self,
-        mock_post: object,
+        mock_post: Mock,
         request_with_session: Request,
     ) -> None:
         """Update session state and return a new access token."""
 
+        class DummyResponse:
+            """Provide a minimal response stub."""
+
+            status_code = HTTPStatus.OK
+
+            @staticmethod
+            def json() -> dict[str, object]:
+                return {
+                    "access_token": "new-access",
+                    "refresh_token": "new-refresh",
+                    "expires_in": EXPIRES_IN_LONG,
+                }
+
+        request_with_session.session["refresh_token"] = "old-refresh"
+        mock_post.return_value = DummyResponse()
+
+        with patch(
+            "outlook_client_service.routers.auth.time.time",
+            return_value=FIXED_NOW,
+        ):
+            token = auth.refresh_access_token(request_with_session)
+
+        assert token == "new-access"
+        assert request_with_session.session["access_token"] == "new-access"
+        assert request_with_session.session["refresh_token"] == "new-refresh"
+        assert request_with_session.session["expires_in"] == EXPIRES_IN_LONG
+        assert request_with_session.session["expires_at"] == EXPECTED_EXPIRES_AT_LONG
+
+        call_kwargs = mock_post.call_args.kwargs
+        assert call_kwargs["data"]["grant_type"] == "refresh_token"
+
     @patch("outlook_client_service.routers.auth.requests.post")
     def test_refresh_access_token_clears_session_and_raises_when_refresh_fails(
         self,
-        mock_post: object,
+        mock_post: Mock,
         request_with_session: Request,
     ) -> None:
         """Clear the session and raise an HTTP exception when refresh fails."""
+
+        class DummyResponse:
+            """Provide a failing response stub."""
+
+            status_code = HTTPStatus.BAD_REQUEST
+
+            @staticmethod
+            def json() -> dict[str, object]:
+                return {"error": "invalid_grant"}
+
+        request_with_session.session["refresh_token"] = "old-refresh"
+        request_with_session.session["access_token"] = "old-access"
+
+        mock_post.return_value = DummyResponse()
+
+        with pytest.raises(HTTPException) as exc_info:
+            auth.refresh_access_token(request_with_session)
+
+        assert exc_info.value.status_code == HTTPStatus.UNAUTHORIZED
+        assert "Failed to refresh token" in exc_info.value.detail
+        assert request_with_session.session == {}
 
     @patch("outlook_client_service.routers.auth._store_token_data")
     @patch("outlook_client_service.routers.auth.requests.post")
     def test_refresh_access_token_raises_when_access_token_missing_after_store(
         self,
-        mock_post: object,
-        mock_store_token_data: object,
+        mock_post: Mock,
+        mock_store_token_data: Mock,
         request_with_session: Request,
     ) -> None:
         """Raise an HTTP exception when access token is missing after storage."""
 
+        class DummyResponse:
+            """Provide a successful response stub."""
+
+            status_code = HTTPStatus.OK
+
+            @staticmethod
+            def json() -> dict[str, object]:
+                return {"access_token": "new-access"}
+
+        request_with_session.session["refresh_token"] = "old-refresh"
+        mock_post.return_value = DummyResponse()
+
+        # Simulate store not writing access_token
+        def noop_store(_: Request, __: dict[str, object]) -> None:
+            return None
+
+        mock_store_token_data.side_effect = noop_store
+
+        with pytest.raises(HTTPException) as exc_info:
+            auth.refresh_access_token(request_with_session)
+
+        assert exc_info.value.status_code == HTTPStatus.UNAUTHORIZED
+        assert "Missing access token in session after refresh" in exc_info.value.detail
 
 class TestGetValidAccessToken:
     """Group tests for retrieving a valid access token."""
@@ -233,26 +315,66 @@ class TestGetValidAccessToken:
     @patch("outlook_client_service.routers.auth.refresh_access_token")
     def test_get_valid_access_token_returns_existing_token_when_not_expiring(
         self,
-        mock_refresh_access_token: object,
+        mock_refresh_access_token: Mock,
         request_with_session: Request,
     ) -> None:
         """Return the existing token when it is not near expiry."""
+        request_with_session.session["access_token"] = "existing-access"
+        request_with_session.session["expires_at"] = (
+            FIXED_NOW + REFRESH_BUFFER_SECONDS + 1
+        )
+
+        with patch(
+            "outlook_client_service.routers.auth.time.time",
+            return_value=FIXED_NOW,
+        ):
+            token = auth.get_valid_access_token(
+                request_with_session,
+                refresh_buffer_seconds=REFRESH_BUFFER_SECONDS,
+            )
+
+        assert token == "existing-access"
+        mock_refresh_access_token.assert_not_called()
 
     @patch("outlook_client_service.routers.auth.refresh_access_token")
     def test_get_valid_access_token_refreshes_when_token_missing(
         self,
-        mock_refresh_access_token: object,
+        mock_refresh_access_token: Mock,
         request_with_session: Request,
     ) -> None:
         """Refresh the token when session token is missing."""
+        mock_refresh_access_token.return_value = "refreshed-access"
+
+        token = auth.get_valid_access_token(
+            request_with_session,
+            refresh_buffer_seconds=REFRESH_BUFFER_SECONDS,
+        )
+
+        assert token == "refreshed-access"
+        mock_refresh_access_token.assert_called_once_with(request_with_session)
 
     @patch("outlook_client_service.routers.auth.refresh_access_token")
     def test_get_valid_access_token_refreshes_when_token_near_expiry(
         self,
-        mock_refresh_access_token: object,
+        mock_refresh_access_token: Mock,
         request_with_session: Request,
     ) -> None:
         """Refresh the token when current token is near expiry."""
+        request_with_session.session["access_token"] = "existing-access"
+        request_with_session.session["expires_at"] = FIXED_NOW + REFRESH_BUFFER_SECONDS
+        mock_refresh_access_token.return_value = "refreshed-access"
+
+        with patch(
+            "outlook_client_service.routers.auth.time.time",
+            return_value=FIXED_NOW,
+        ):
+            token = auth.get_valid_access_token(
+                request_with_session,
+                refresh_buffer_seconds=REFRESH_BUFFER_SECONDS,
+            )
+
+        assert token == "refreshed-access"
+        mock_refresh_access_token.assert_called_once_with(request_with_session)
 
 
 class TestCallback:
@@ -263,25 +385,93 @@ class TestCallback:
         request_with_session: Request,
     ) -> None:
         """Raise an HTTP exception when callback includes an error description."""
+        with pytest.raises(HTTPException) as exc_info:
+            auth.callback(
+                request_with_session,
+                error="access_denied",
+                error_description="User denied access.",
+            )
+
+        assert exc_info.value.status_code == HTTPStatus.BAD_REQUEST
+        assert exc_info.value.detail == "User denied access."
 
     def test_callback_raises_when_code_is_missing(
         self,
         request_with_session: Request,
     ) -> None:
         """Raise an HTTP exception when authorization code is missing."""
+        with pytest.raises(HTTPException) as exc_info:
+            auth.callback(request_with_session)
+
+        assert exc_info.value.status_code == HTTPStatus.BAD_REQUEST
+        assert exc_info.value.detail == "Missing authorization code."
 
     @patch("outlook_client_service.routers.auth.requests.post")
     def test_callback_stores_token_and_returns_success_message(
         self,
-        mock_post: object,
+        mock_post: Mock,
         request_with_session: Request,
     ) -> None:
         """Store token data and return a success message after callback."""
 
+        class DummyResponse:
+            """Provide a successful token response stub."""
+
+            status_code = HTTPStatus.OK
+
+            @staticmethod
+            def json() -> dict[str, object]:
+                return {
+                    "access_token": "new-access",
+                    "refresh_token": "new-refresh",
+                    "expires_in": EXPIRES_IN_LONG,
+                }
+
+        mock_post.return_value = DummyResponse()
+
+        with patch(
+            "outlook_client_service.routers.auth.time.time",
+            return_value=FIXED_NOW,
+        ):
+            response = auth.callback(
+                request_with_session,
+                code="auth-code-123",
+            )
+
+        assert response == {"message": "Authentication successful."}
+        assert request_with_session.session["access_token"] == "new-access"
+        assert request_with_session.session["refresh_token"] == "new-refresh"
+        assert request_with_session.session["expires_in"] == EXPIRES_IN_LONG
+        assert request_with_session.session["expires_at"] == EXPECTED_EXPIRES_AT_LONG
+
+        call_kwargs = mock_post.call_args.kwargs
+        assert call_kwargs["data"]["grant_type"] == "authorization_code"
+        assert call_kwargs["data"]["code"] == "auth-code-123"
+
     @patch("outlook_client_service.routers.auth.requests.post")
     def test_callback_raises_when_token_exchange_fails(
         self,
-        mock_post: object,
+        mock_post: Mock,
         request_with_session: Request,
     ) -> None:
         """Raise an HTTP exception when token exchange fails."""
+
+        class DummyResponse:
+            """Provide a failing token response stub."""
+
+            status_code = HTTPStatus.BAD_REQUEST
+
+            @staticmethod
+            def json() -> dict[str, object]:
+                return {"error": "invalid_grant"}
+
+        mock_post.return_value = DummyResponse()
+
+        with pytest.raises(HTTPException) as exc_info:
+            auth.callback(
+                request_with_session,
+                code="bad-code",
+            )
+
+        assert exc_info.value.status_code == HTTPStatus.BAD_REQUEST
+        assert "invalid_grant" in str(exc_info.value.detail)
