@@ -9,7 +9,7 @@ from calendar_client_api.event import EventPatch
 from fastapi import HTTPException
 from outlook_client_impl.event_impl import OutlookCalendarEvent
 from outlook_client_impl.outlook_impl import OutlookClient
-from outlook_client_service.routers.events import update_event
+from outlook_client_service.routers.events import delete_event, update_event
 from outlook_client_service.schemas.event import EventResponse, EventUpdateRequest
 
 
@@ -85,3 +85,33 @@ class TestUpdateEvent:
 
         assert exc_info.value.status_code == HTTPStatus.BAD_GATEWAY
         assert exc_info.value.detail == "Failed to update event: boom"
+
+
+class TestDeleteEvent:
+    """Group tests for deleting an event."""
+
+    def setup_method(self) -> None:
+        """Create shared client double for each test."""
+        self.event_id = "event-123"
+        self.client = create_autospec(OutlookClient, instance=True)
+
+    def test_call_client_delete(self) -> None:
+        """Call the client's delete_event method once."""
+        delete_event(self.event_id, self.client)
+
+        self.client.delete_event.assert_called_once_with(event_id=self.event_id)
+
+    def test_wrap_client_exception_as_http_502(self) -> None:
+        """Wrap a client failure in an HTTP 502 exception."""
+        self.client.delete_event.side_effect = RuntimeError("Error")
+
+        with pytest.raises(HTTPException) as exc_info:
+            delete_event(self.event_id, self.client)
+
+        assert exc_info.value.status_code == HTTPStatus.BAD_GATEWAY
+        assert exc_info.value.detail == "Failed to delete event: Error"
+
+    def test_return_none_on_success(self) -> None:
+        """Return None for a successful deletion (HTTP 204)."""
+        result = delete_event(self.event_id, self.client)
+        assert result is None
