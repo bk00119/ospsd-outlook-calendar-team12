@@ -9,7 +9,7 @@ from calendar_client_api.event import EventPatch
 from fastapi import HTTPException
 from outlook_client_impl.event_impl import OutlookCalendarEvent
 from outlook_client_impl.outlook_impl import OutlookClient
-from outlook_client_service.routers.events import create_event, delete_event, update_event
+from outlook_client_service.routers.events import create_event, delete_event, get_event, update_event
 from outlook_client_service.schemas.event import EventCreateRequest, EventResponse, EventUpdateRequest
 
 
@@ -185,3 +185,54 @@ class TestDeleteEvent:
         """Return None for a successful deletion (HTTP 204)."""
         result = delete_event(self.event_id, self.client)
         assert result is None
+
+
+class TestGetEvent:
+    """Group tests for getting an event."""
+
+    def setup_method(self) -> None:
+        """Create shared client double for each test."""
+        self.event_id = "event-123"
+        self.client = create_autospec(OutlookClient, instance=True)
+
+    def _build_event(self) -> OutlookCalendarEvent:
+        """Build a concrete OutlookCalendarEvent returned by the client."""
+        raw = {
+            "subject": "Test Event",
+            "start": {"dateTime": "2026-03-20T09:00:00Z"},
+            "end": {"dateTime": "2026-03-20T10:00:00Z"},
+            "location": {"displayName": "Room 202"},
+            "body": {"content": "Test description."},
+        }
+        import json
+
+        return OutlookCalendarEvent(self.event_id, json.dumps(raw))
+
+    def test_call_client_get(self) -> None:
+        """Call the client's get_event method once."""
+        self.client.get_event.return_value = self._build_event()
+
+        get_event(self.event_id, self.client)
+
+        self.client.get_event.assert_called_once_with(event_id=self.event_id)
+
+    def test_wrap_client_exception_as_http_502(self) -> None:
+        """Wrap a client failure in an HTTP 502 exception."""
+        self.client.get_event.side_effect = RuntimeError("Error")
+
+        with pytest.raises(HTTPException) as exc_info:
+            get_event(self.event_id, self.client)
+
+        assert exc_info.value.status_code == HTTPStatus.BAD_GATEWAY
+        assert exc_info.value.detail == "Failed to get event: Error"
+
+    def test_return_mapped_event_response(self) -> None:
+        """Return a mapped EventResponse after a successful get."""
+        self.client.get_event.return_value = self._build_event()
+
+        response = get_event(self.event_id, self.client)
+
+        assert response.id == self.event_id
+        assert response.title == "Test Event"
+        assert response.location == "Room 202"
+        assert response.description == "Test description."

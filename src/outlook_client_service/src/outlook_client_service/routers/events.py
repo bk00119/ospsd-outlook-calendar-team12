@@ -82,3 +82,13 @@ def delete_event(event_id: str, client: Annotated[OutlookClient, Depends(get_out
         client.delete_event(event_id=event_id)
     except Exception as e:
         raise HTTPException(status_code=HTTPStatus.BAD_GATEWAY, detail=f"Failed to delete event: {e}") from e
+
+
+@router.get("/{event_id}")
+def get_event(event_id: str, client: Annotated[OutlookClient, Depends(get_outlook_client)]) -> EventResponse:
+    """Get an event by ID."""
+    try:
+        event = client.get_event(event_id=event_id)
+    except Exception as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_GATEWAY, detail=f"Failed to get event: {e}") from e
+    return _to_event_response(event)
