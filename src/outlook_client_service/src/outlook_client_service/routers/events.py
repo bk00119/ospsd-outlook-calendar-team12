@@ -1,5 +1,6 @@
 """Event routes for the Outlook client service."""
 
+from datetime import datetime
 from http import HTTPStatus
 from typing import Annotated
 
@@ -30,9 +31,17 @@ def _to_event_response(event: Event) -> EventResponse:
 
 
 @router.get("/")
-def list_events() -> list[EventResponse]:
-    """List events."""
-    return []
+def list_events(
+    client: Annotated[OutlookClient, Depends(get_outlook_client)],
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> list[EventResponse]:
+    """List calendar events, optionally filtered by start and end time."""
+    try:
+        events = client.list_events(start=start, end=end)
+    except Exception as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_GATEWAY, detail=f"Failed to list events: {e}") from e
+    return [_to_event_response(ev) for ev in events]
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
