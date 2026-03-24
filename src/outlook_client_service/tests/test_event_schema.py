@@ -3,8 +3,40 @@
 from datetime import UTC, datetime
 
 import pytest
-from outlook_client_service.schemas.event import EventUpdateRequest
+from outlook_client_service.schemas.event import EventCreateRequest, EventUpdateRequest
 from pydantic import ValidationError
+
+
+class TestEventCreateRequest:
+    """Group tests for EventCreateRequest validation."""
+
+    def setup_method(self) -> None:
+        """Create shared datetime fixtures for each test."""
+        self.starts_at = datetime(2026, 3, 20, 9, 0, 0, tzinfo=UTC)
+        self.ends_at = datetime(2026, 3, 20, 10, 0, 0, tzinfo=UTC)
+
+    def test_accept_valid_start_and_end_order(self) -> None:
+        """Accept a create request when ends_at is later than starts_at."""
+        request = EventCreateRequest(
+            title="New event",
+            starts_at=self.starts_at,
+            ends_at=self.ends_at,
+        )
+
+        assert request.title == "New event"
+        assert request.starts_at == self.starts_at
+        assert request.ends_at == self.ends_at
+
+    def test_raise_when_end_is_not_later_than_start(self) -> None:
+        """Raise a validation error when ends_at is not later than starts_at."""
+        with pytest.raises(ValidationError) as exc_info:
+            EventCreateRequest(
+                title="New event",
+                starts_at=self.starts_at,
+                ends_at=self.starts_at,
+            )
+
+        assert "ends_at must be later than starts_at." in str(exc_info.value)
 
 
 class TestEventUpdateRequest:

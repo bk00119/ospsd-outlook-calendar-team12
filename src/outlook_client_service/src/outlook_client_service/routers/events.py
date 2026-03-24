@@ -36,16 +36,22 @@ def list_events() -> list[EventResponse]:
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def create_event(event: EventCreateRequest) -> EventResponse:
+def create_event(
+    event: EventCreateRequest,
+    client: Annotated[OutlookClient, Depends(get_outlook_client)],
+) -> EventResponse:
     """Create a new event."""
-    return EventResponse(
-        id="placeholder-id",
-        title=event.title,
-        starts_at=event.starts_at,
-        ends_at=event.ends_at,
-        location=event.location,
-        description=event.description,
-    )
+    try:
+        created_event = client.create_event(
+            title=event.title,
+            starts_at=event.starts_at,
+            ends_at=event.ends_at,
+            location=event.location,
+            description=event.description,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_GATEWAY, detail=f"Failed to create event: {e}") from e
+    return _to_event_response(created_event)
 
 
 @router.patch("/{event_id}")

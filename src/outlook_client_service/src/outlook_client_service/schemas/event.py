@@ -25,6 +25,14 @@ class EventCreateRequest(BaseModel):
     location: str | None = None
     description: str | None = None
 
+    @model_validator(mode="after")
+    def validate_time_order(self) -> "EventCreateRequest":
+        """Validate that ends_at is later than starts_at."""
+        if self.ends_at <= self.starts_at:
+            message = "ends_at must be later than starts_at."
+            raise ValueError(message)
+        return self
+
 
 class EventUpdateRequest(BaseModel):
     """Request model for updating an event (partial update)."""
