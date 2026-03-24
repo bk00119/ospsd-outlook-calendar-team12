@@ -68,3 +68,11 @@ def update_event(
         raise HTTPException(status_code=HTTPStatus.BAD_GATEWAY, detail=f"Failed to update event: {e}") from e
     return _to_event_response(updated_event)
 
+
+@router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_event(event_id: str, client: Annotated[OutlookClient, Depends(get_outlook_client)]) -> None:
+    """Delete an event."""
+    try:
+        client.delete_event(event_id=event_id)
+    except Exception as e:
+        raise HTTPException(status_code=HTTPStatus.BAD_GATEWAY, detail=f"Failed to delete event: {e}") from e
