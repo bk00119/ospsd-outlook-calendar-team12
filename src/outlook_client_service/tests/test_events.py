@@ -9,7 +9,7 @@ from calendar_client_api.event import EventPatch
 from fastapi import HTTPException
 from outlook_client_impl.event_impl import OutlookCalendarEvent
 from outlook_client_impl.outlook_impl import OutlookClient
-from outlook_client_service.routers.events import create_event, delete_event, get_event, update_event
+from outlook_client_service.routers.events import create_event, delete_event, get_event, list_events, update_event
 from outlook_client_service.schemas.event import EventCreateRequest, EventResponse, EventUpdateRequest
 
 
@@ -236,3 +236,69 @@ class TestGetEvent:
         assert response.title == "Test Event"
         assert response.location == "Room 202"
         assert response.description == "Test description."
+
+
+class TestListEvents:
+    """Group tests for listing events."""
+
+    def setup_method(self) -> None:
+        """Create shared client double for each test."""
+        self.event_id = "event-123"
+        self.starts_at = datetime(2026, 3, 20, 9, 0, 0, tzinfo=UTC)
+        self.ends_at = datetime(2026, 3, 20, 10, 0, 0, tzinfo=UTC)
+        self.client = create_autospec(OutlookClient, instance=True)
+
+    def _build_event(self) -> OutlookCalendarEvent:
+        """Build a concrete OutlookCalendarEvent returned by the client."""
+        raw = {
+            "subject": "Test Event",
+            "start": {"dateTime": self.starts_at.isoformat()},
+            "end": {"dateTime": self.ends_at.isoformat()},
+            "location": {"displayName": "Room 101"},
+            "body": {"content": "Test description."},
+        }
+        import json
+
+        return OutlookCalendarEvent(self.event_id, json.dumps(raw))
+
+    def test_call_client_list_events(self) -> None:
+        """Call the client's list_events method with start and end filters."""
+        self.client.list_events.return_value = [self._build_event()]
+
+        list_events(self.client, start=self.starts_at, end=self.ends_at)
+
+        self.client.list_events.assert_called_once_with(start=self.starts_at, end=self.ends_at)
+
+    def test_return_mapped_event_responses(self) -> None:
+        """Return a list of mapped EventResponse objects after a successful list."""
+        self.client.list_events.return_value = [self._build_event()]
+
+        response = list_events(self.client, start=None, end=None)
+
+        assert len(response) == 1
+        assert response[0] == EventResponse(
+            id=self.event_id,
+            title="Test Event",
+            starts_at=self.starts_at,
+            ends_at=self.ends_at,
+            location="Room 101",
+            description="Test description.",
+        )
+
+    def test_return_empty_list_when_no_events(self) -> None:
+        """Return an empty list when the client returns no events."""
+        self.client.list_events.return_value = []
+
+        response = list_events(self.client, start=None, end=None)
+
+        assert response == []
+
+    def test_wrap_client_exception_as_http_502(self) -> None:
+        """Wrap a client failure in an HTTP 502 exception."""
+        self.client.list_events.side_effect = RuntimeError("boom")
+
+        with pytest.raises(HTTPException) as exc_info:
+            list_events(self.client, start=None, end=None)
+
+        assert exc_info.value.status_code == HTTPStatus.BAD_GATEWAY
+        assert exc_info.value.detail == "Failed to list events: boom"
