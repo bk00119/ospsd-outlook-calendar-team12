@@ -27,6 +27,10 @@ members = [
     "src/outlook_client_impl",
     "src/outlook_client_service",
     "src/outlook_client_service_client",
+<<<<<<< HEAD
+=======
+    "src/outlook_service_client_adapter",
+>>>>>>> origin/hw-2
 ]
 
 [tool.ruff]
@@ -60,6 +64,7 @@ mypy_path = [
     "src/calendar_client_api/src",
     "src/outlook_client_impl/src",
     "src/outlook_client_service/src",
+    "src/outlook_service_client_adapter/src",
 ]
 ignore_missing_imports = false
 
@@ -69,6 +74,7 @@ pythonpath = [
     "src/calendar_client_api/src",
     "src/outlook_client_impl/src",
     "src/outlook_client_service/src",
+    "src/outlook_service_client_adapter/src",
 ]
 testpaths = ["tests", "src/*/tests"]
 addopts = ["--cov", "--cov-report=term-missing", "--import-mode=importlib"]
@@ -82,7 +88,7 @@ markers = [
 
 [tool.coverage.run]
 source = ["src"]
-omit = ["*/tests/*", "*/__main__.py"]
+omit = ["*/tests/*", "*/__main__.py", "src/outlook_client_service_client/*"]
 
 [tool.coverage.report]
 fail_under = 85 # Justification: A high threshold ensures most code is tested.

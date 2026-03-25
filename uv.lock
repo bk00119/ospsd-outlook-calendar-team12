@@ -8,6 +8,7 @@ members = [
     "outlook-client-impl",
     "outlook-client-service",
     "outlook-client-service-client",
+    "outlook-service-client-adapter",
     "team12-calendar-client-api",
 ]
 
@@ -1621,6 +1622,31 @@ requires-dist = [
 ]
 
 [[package]]
+<<<<<<< HEAD
+=======
+name = "outlook-service-client-adapter"
+version = "0.1.0"
+source = { editable = "src/outlook_service_client_adapter" }
+dependencies = [
+    { name = "calendar-client-api" },
+    { name = "outlook-client-service-client" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "calendar-client-api", editable = "src/calendar_client_api" },
+    { name = "outlook-client-service-client", editable = "src/outlook_client_service_client" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
+]
+provides-extras = ["test"]
+
+[[package]]
+>>>>>>> origin/hw-2
 name = "packaging"
 version = "26.0"
 source = { registry = "https://pypi.org/simple" }
