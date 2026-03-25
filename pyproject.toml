@@ -27,10 +27,7 @@ members = [
     "src/outlook_client_impl",
     "src/outlook_client_service",
     "src/outlook_client_service_client",
-<<<<<<< HEAD
-=======
     "src/outlook_service_client_adapter",
->>>>>>> origin/hw-2
 ]
 
 [tool.ruff]
