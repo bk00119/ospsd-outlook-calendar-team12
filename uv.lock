@@ -1622,8 +1622,6 @@ requires-dist = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-=======
 name = "outlook-service-client-adapter"
 version = "0.1.0"
 source = { editable = "src/outlook_service_client_adapter" }
@@ -1646,7 +1644,6 @@ requires-dist = [
 provides-extras = ["test"]
 
 [[package]]
->>>>>>> origin/hw-2
 name = "packaging"
 version = "26.0"
 source = { registry = "https://pypi.org/simple" }
