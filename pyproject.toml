@@ -27,6 +27,7 @@ members = [
     "src/outlook_client_impl",
     "src/outlook_client_service",
     "src/outlook_client_service_client",
+    "src/outlook_service_client_adapter",
 ]
 
 [tool.ruff]
@@ -60,6 +61,7 @@ mypy_path = [
     "src/calendar_client_api/src",
     "src/outlook_client_impl/src",
     "src/outlook_client_service/src",
+    "src/outlook_service_client_adapter/src",
 ]
 ignore_missing_imports = false
 
@@ -69,6 +71,7 @@ pythonpath = [
     "src/calendar_client_api/src",
     "src/outlook_client_impl/src",
     "src/outlook_client_service/src",
+    "src/outlook_service_client_adapter/src",
 ]
 testpaths = ["tests", "src/*/tests"]
 addopts = ["--cov", "--cov-report=term-missing", "--import-mode=importlib"]
