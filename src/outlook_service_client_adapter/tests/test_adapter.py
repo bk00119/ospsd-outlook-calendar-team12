@@ -1,8 +1,11 @@
 """Tests for the ServiceClientAdapter."""
 
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
+from outlook_client_service_client.models.event_response import EventResponse
+from outlook_client_service_client.models.http_validation_error import HTTPValidationError
 from outlook_service_client_adapter.adapter import ServiceClientAdapter
 
 
@@ -32,3 +35,105 @@ class TestDeleteEvent:
 
         with pytest.raises(Exception, match="connection failed"):
             self.adapter.delete_event(self.event_id)
+
+
+class TestCreateEvent:
+    """Tests for the create_event adapter method."""
+
+    def setup_method(self) -> None:
+        """Create a mock generated client for each test."""
+        self.generated_client = MagicMock()
+        self.adapter = ServiceClientAdapter(self.generated_client)
+        self.starts_at = datetime(2026, 3, 25, 9, 0, tzinfo=UTC)
+        self.ends_at = datetime(2026, 3, 25, 10, 0, tzinfo=UTC)
+
+    @patch("outlook_service_client_adapter.adapter.create_event_events_post")
+    def test_delegates_to_generated_client_with_expected_body(self, mock_create: MagicMock) -> None:
+        """Call generated create function with mapped EventCreateRequest payload."""
+        mock_create.sync.return_value = EventResponse(
+            id="evt-1",
+            title="Team sync",
+            starts_at=self.starts_at,
+            ends_at=self.ends_at,
+            location="Room A",
+            description="Discuss roadmap",
+        )
+
+        self.adapter.create_event(
+            title="Team sync",
+            starts_at=self.starts_at,
+            ends_at=self.ends_at,
+            location="Room A",
+            description="Discuss roadmap",
+        )
+
+        mock_create.sync.assert_called_once()
+        call_kwargs = mock_create.sync.call_args.kwargs
+        assert call_kwargs["client"] is self.generated_client
+        body = call_kwargs["body"]
+        assert body.title == "Team sync"
+        assert body.starts_at == self.starts_at
+        assert body.ends_at == self.ends_at
+        assert body.location == "Room A"
+        assert body.description == "Discuss roadmap"
+
+    @patch("outlook_service_client_adapter.adapter.create_event_events_post")
+    def test_maps_event_response_to_event_contract(self, mock_create: MagicMock) -> None:
+        """Return an Event-compatible object mapped from generated EventResponse."""
+        mock_create.sync.return_value = EventResponse(
+            id="evt-2",
+            title="1:1",
+            starts_at=self.starts_at,
+            ends_at=self.ends_at,
+            location=None,
+            description=None,
+        )
+
+        event = self.adapter.create_event(
+            title="1:1",
+            starts_at=self.starts_at,
+            ends_at=self.ends_at,
+        )
+
+        assert event.id == "evt-2"
+        assert event.title == "1:1"
+        assert event.starts_at == self.starts_at
+        assert event.ends_at == self.ends_at
+        assert event.location is None
+        assert event.description is None
+
+    @patch("outlook_service_client_adapter.adapter.create_event_events_post")
+    def test_raises_runtime_error_on_empty_response(self, mock_create: MagicMock) -> None:
+        """Raise RuntimeError when generated create returns no payload."""
+        mock_create.sync.return_value = None
+
+        with pytest.raises(RuntimeError, match="create_event returned no response payload"):
+            self.adapter.create_event(
+                title="Empty",
+                starts_at=self.starts_at,
+                ends_at=self.ends_at,
+            )
+
+    @patch("outlook_service_client_adapter.adapter.create_event_events_post")
+    def test_raises_type_error_on_validation_response(self, mock_create: MagicMock) -> None:
+        """Raise TypeError when service returns validation error payload."""
+        mock_create.sync.return_value = HTTPValidationError()
+
+        with pytest.raises(TypeError, match="create_event validation failed"):
+            self.adapter.create_event(
+                title="Bad",
+                starts_at=self.starts_at,
+                ends_at=self.ends_at,
+            )
+
+    @patch("outlook_service_client_adapter.adapter.create_event_events_post")
+    def test_propagates_generated_client_exception(self, mock_create: MagicMock) -> None:
+        """Propagate exceptions from generated create call."""
+        mock_create.sync.side_effect = Exception("network failure")
+
+        with pytest.raises(Exception, match="network failure"):
+            self.adapter.create_event(
+                title="Err",
+                starts_at=self.starts_at,
+                ends_at=self.ends_at,
+            )
