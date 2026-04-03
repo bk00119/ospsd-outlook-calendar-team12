@@ -5,10 +5,15 @@ from datetime import datetime
 
 from calendar_client_api.client import Client
 from calendar_client_api.event import Event, EventPatch
-from outlook_client_service_client.api.events import create_event_events_post, delete_event_events_event_id_delete
+from outlook_client_service_client.api.events import (
+    create_event_events_post,
+    delete_event_events_event_id_delete,
+    update_event_events_event_id_patch,
+)
 from outlook_client_service_client.client import Client as GeneratedClient
 from outlook_client_service_client.models.event_create_request import EventCreateRequest
 from outlook_client_service_client.models.event_response import EventResponse
+from outlook_client_service_client.models.event_update_request import EventUpdateRequest
 from outlook_client_service_client.models.http_validation_error import HTTPValidationError
 from outlook_client_service_client.types import Unset
 
@@ -136,4 +141,23 @@ class ServiceClientAdapter(Client):
 
     def update_event(self, event_id: str, payload: EventPatch) -> Event:
         """Update an event by its ID with a payload."""
-        raise NotImplementedError
+        body = EventUpdateRequest(
+            title=payload.title,
+            starts_at=payload.starts_at,
+            ends_at=payload.ends_at,
+            location=payload.location,
+            description=payload.description,
+        )
+        result = update_event_events_event_id_patch.sync(
+            client=self._client,
+            event_id=event_id,
+            body=body,
+        )
+        if result is None:
+            msg = "update_event returned no response payload."
+            raise RuntimeError(msg)
+        if isinstance(result, HTTPValidationError):
+            msg = f"update_event validation failed: {result.to_dict()}"
+            raise TypeError(msg)
+        return self._event_from_response(result)
+
