@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
+from calendar_client_api.event import EventPatch
 from outlook_client_service_client.models.event_response import EventResponse
 from outlook_client_service_client.models.http_validation_error import HTTPValidationError
 from outlook_service_client_adapter.adapter import ServiceClientAdapter
@@ -137,3 +138,107 @@ class TestCreateEvent:
                 starts_at=self.starts_at,
                 ends_at=self.ends_at,
             )
+
+
+class TestUpdateEvent:
+    """Tests for the update_event adapter method."""
+
+    def setup_method(self) -> None:
+        """Create a mock generated client and shared event data for each test."""
+        self.generated_client = MagicMock()
+        self.adapter = ServiceClientAdapter(self.generated_client)
+        self.event_id = "event-456"
+        self.starts_at = datetime(2026, 3, 25, 9, 0, tzinfo=UTC)
+        self.ends_at = datetime(2026, 3, 25, 10, 0, tzinfo=UTC)
+        self.payload = EventPatch(
+            title="Updated sync",
+            starts_at=self.starts_at,
+            ends_at=self.ends_at,
+            location="Room B",
+            description="Updated agenda",
+        )
+
+    @patch("outlook_service_client_adapter.adapter.update_event_events_event_id_patch")
+    def test_delegates_to_generated_client_with_expected_body(
+        self,
+        mock_update: MagicMock,
+    ) -> None:
+        """Call generated update function with mapped EventUpdateRequest payload."""
+        mock_update.sync.return_value = EventResponse(
+            id=self.event_id,
+            title="Updated sync",
+            starts_at=self.starts_at,
+            ends_at=self.ends_at,
+            location="Room B",
+            description="Updated agenda",
+        )
+
+        self.adapter.update_event(self.event_id, self.payload)
+
+        mock_update.sync.assert_called_once()
+        call_kwargs = mock_update.sync.call_args.kwargs
+        assert call_kwargs["client"] is self.generated_client
+        assert call_kwargs["event_id"] == self.event_id
+        body = call_kwargs["body"]
+        assert body.title == "Updated sync"
+        assert body.starts_at == self.starts_at
+        assert body.ends_at == self.ends_at
+        assert body.location == "Room B"
+        assert body.description == "Updated agenda"
+
+    @patch("outlook_service_client_adapter.adapter.update_event_events_event_id_patch")
+    def test_maps_event_response_to_event_contract(
+        self,
+        mock_update: MagicMock,
+    ) -> None:
+        """Return an Event-compatible object mapped from generated EventResponse."""
+        mock_update.sync.return_value = EventResponse(
+            id=self.event_id,
+            title="Updated sync",
+            starts_at=self.starts_at,
+            ends_at=self.ends_at,
+            location=None,
+            description=None,
+        )
+
+        event = self.adapter.update_event(self.event_id, self.payload)
+
+        assert event.id == self.event_id
+        assert event.title == "Updated sync"
+        assert event.starts_at == self.starts_at
+        assert event.ends_at == self.ends_at
+        assert event.location is None
+        assert event.description is None
+
+    @patch("outlook_service_client_adapter.adapter.update_event_events_event_id_patch")
+    def test_raises_runtime_error_on_empty_response(
+        self,
+        mock_update: MagicMock,
+    ) -> None:
+        """Raise RuntimeError when generated update returns no payload."""
+        mock_update.sync.return_value = None
+
+        with pytest.raises(RuntimeError, match="update_event returned no response payload"):
+            self.adapter.update_event(self.event_id, self.payload)
+
+    @patch("outlook_service_client_adapter.adapter.update_event_events_event_id_patch")
+    def test_raises_type_error_on_validation_response(
+        self,
+        mock_update: MagicMock,
+    ) -> None:
+        """Raise TypeError when service returns validation error payload."""
+        mock_update.sync.return_value = HTTPValidationError()
+
+        with pytest.raises(TypeError, match="update_event validation failed"):
+            self.adapter.update_event(self.event_id, self.payload)
+
+    @patch("outlook_service_client_adapter.adapter.update_event_events_event_id_patch")
+    def test_propagates_generated_client_exception(
+        self,
+        mock_update: MagicMock,
+    ) -> None:
+        """Propagate exceptions from generated update call."""
+        mock_update.sync.side_effect = Exception("network failure")
+
+        with pytest.raises(Exception, match="network failure"):
+            self.adapter.update_event(self.event_id, self.payload)
