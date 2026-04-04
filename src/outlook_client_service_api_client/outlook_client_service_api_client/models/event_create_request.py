@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 from collections.abc import Mapping
-from typing import Any, Self, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
@@ -10,24 +10,21 @@ from dateutil.parser import isoparse
 
 from ..types import UNSET, Unset
 
-T = TypeVar("T", bound="EventResponse")
+T = TypeVar("T", bound="EventCreateRequest")
 
 
 @_attrs_define
-class EventResponse:
-    """Response model for an event.
+class EventCreateRequest:
+    """Request model for creating an event.
 
     Attributes:
-        id (str):
         title (str):
         starts_at (datetime.datetime):
         ends_at (datetime.datetime):
         location (None | str | Unset):
         description (None | str | Unset):
-
     """
 
-    id: str
     title: str
     starts_at: datetime.datetime
     ends_at: datetime.datetime
@@ -36,8 +33,6 @@ class EventResponse:
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        id = self.id
-
         title = self.title
 
         starts_at = self.starts_at.isoformat()
@@ -60,11 +55,10 @@ class EventResponse:
         field_dict.update(self.additional_properties)
         field_dict.update(
             {
-                "id": id,
                 "title": title,
                 "starts_at": starts_at,
                 "ends_at": ends_at,
-            },
+            }
         )
         if location is not UNSET:
             field_dict["location"] = location
@@ -74,10 +68,8 @@ class EventResponse:
         return field_dict
 
     @classmethod
-    def from_dict(cls, src_dict: Mapping[str, Any]) -> Self:
+    def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        id = d.pop("id")
-
         title = d.pop("title")
 
         starts_at = isoparse(d.pop("starts_at"))
@@ -89,7 +81,7 @@ class EventResponse:
                 return data
             if isinstance(data, Unset):
                 return data
-            return cast("None | str | Unset", data)
+            return cast(None | str | Unset, data)
 
         location = _parse_location(d.pop("location", UNSET))
 
@@ -98,12 +90,11 @@ class EventResponse:
                 return data
             if isinstance(data, Unset):
                 return data
-            return cast("None | str | Unset", data)
+            return cast(None | str | Unset, data)
 
         description = _parse_description(d.pop("description", UNSET))
 
-        event_response = cls(
-            id=id,
+        event_create_request = cls(
             title=title,
             starts_at=starts_at,
             ends_at=ends_at,
@@ -111,8 +102,8 @@ class EventResponse:
             description=description,
         )
 
-        event_response.additional_properties = d
-        return event_response
+        event_create_request.additional_properties = d
+        return event_create_request
 
     @property
     def additional_keys(self) -> list[str]:

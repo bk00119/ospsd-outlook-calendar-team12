@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "calendar-client-api",
-    "outlook-client-service-client",
+    "outlook-client-service-api-client",
 ]
 
 [project.optional-dependencies]
@@ -26,4 +26,4 @@ packages = ["src/outlook_service_client_adapter"]
 
 [tool.uv.sources]
 calendar-client-api = { workspace = true }
-outlook-client-service-client = { workspace = true }
+outlook-client-service-api-client = { workspace = true }

@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from calendar_client_api.event import EventPatch
-from outlook_client_service_client.models.event_response import EventResponse
-from outlook_client_service_client.models.http_validation_error import HTTPValidationError
+from outlook_client_service_api_client.models.event_response import EventResponse
+from outlook_client_service_api_client.models.http_validation_error import HTTPValidationError
 from outlook_service_client_adapter.adapter import ServiceClientAdapter
 
 
@@ -332,7 +332,7 @@ class TestListEvents:
 
     @patch("outlook_service_client_adapter.adapter.list_events_events_get")
     def test_delegates_to_generated_client(self, mock_list: MagicMock) -> None:
-        """Call generated list function with start and end filters."""
+        """Call generated list function with start/end/types filters."""
         mock_list.sync.return_value = [
             EventResponse(
                 id="evt-1",
@@ -344,12 +344,17 @@ class TestListEvents:
             ),
         ]
 
-        self.adapter.list_events(start=self.starts_at, end=self.ends_at)
+        self.adapter.list_events(
+            start=self.starts_at,
+            end=self.ends_at,
+            types=["singleInstance"],
+        )
 
         mock_list.sync.assert_called_once_with(
             client=self.generated_client,
             start=self.starts_at,
             end=self.ends_at,
+            types=["singleInstance"],
         )
 
     @patch("outlook_service_client_adapter.adapter.list_events_events_get")

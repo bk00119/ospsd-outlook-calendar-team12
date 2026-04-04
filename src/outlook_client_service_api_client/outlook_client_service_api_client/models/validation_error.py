@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Self, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
@@ -17,13 +17,13 @@ T = TypeVar("T", bound="ValidationError")
 
 @_attrs_define
 class ValidationError:
-    """Attributes:
-    loc (list[int | str]):
-    msg (str):
-    type_ (str):
-    input_ (Any | Unset):
-    ctx (ValidationErrorContext | Unset):
-
+    """
+    Attributes:
+        loc (list[int | str]):
+        msg (str):
+        type_ (str):
+        input_ (Any | Unset):
+        ctx (ValidationErrorContext | Unset):
     """
 
     loc: list[int | str]
@@ -57,7 +57,7 @@ class ValidationError:
                 "loc": loc,
                 "msg": msg,
                 "type": type_,
-            },
+            }
         )
         if input_ is not UNSET:
             field_dict["input"] = input_
@@ -67,7 +67,7 @@ class ValidationError:
         return field_dict
 
     @classmethod
-    def from_dict(cls, src_dict: Mapping[str, Any]) -> Self:
+    def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.validation_error_context import ValidationErrorContext
 
         d = dict(src_dict)
@@ -76,7 +76,7 @@ class ValidationError:
         for loc_item_data in _loc:
 
             def _parse_loc_item(data: object) -> int | str:
-                return cast("int | str", data)
+                return cast(int | str, data)
 
             loc_item = _parse_loc_item(loc_item_data)
 

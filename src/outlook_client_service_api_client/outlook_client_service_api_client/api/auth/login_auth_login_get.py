@@ -24,7 +24,8 @@ def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Res
 
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
-    return None
+    else:
+        return None
 
 
 def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[Any]:
@@ -50,8 +51,8 @@ def sync_detailed(
 
     Returns:
         Response[Any]
-
     """
+
     kwargs = _get_kwargs()
 
     response = client.get_httpx_client().request(
@@ -75,8 +76,8 @@ async def asyncio_detailed(
 
     Returns:
         Response[Any]
-
     """
+
     kwargs = _get_kwargs()
 
     response = await client.get_async_httpx_client().request(**kwargs)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 from collections.abc import Mapping
-from typing import Any, Self, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
@@ -23,7 +23,6 @@ class EventUpdateRequest:
         ends_at (datetime.datetime | None | Unset):
         location (None | str | Unset):
         description (None | str | Unset):
-
     """
 
     title: None | str | Unset = UNSET
@@ -85,7 +84,7 @@ class EventUpdateRequest:
         return field_dict
 
     @classmethod
-    def from_dict(cls, src_dict: Mapping[str, Any]) -> Self:
+    def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
 
         def _parse_title(data: object) -> None | str | Unset:
@@ -93,7 +92,7 @@ class EventUpdateRequest:
                 return data
             if isinstance(data, Unset):
                 return data
-            return cast("None | str | Unset", data)
+            return cast(None | str | Unset, data)
 
         title = _parse_title(d.pop("title", UNSET))
 
@@ -104,13 +103,13 @@ class EventUpdateRequest:
                 return data
             try:
                 if not isinstance(data, str):
-                    raise TypeError
+                    raise TypeError()
                 starts_at_type_0 = isoparse(data)
 
                 return starts_at_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
-            return cast("datetime.datetime | None | Unset", data)
+            return cast(datetime.datetime | None | Unset, data)
 
         starts_at = _parse_starts_at(d.pop("starts_at", UNSET))
 
@@ -121,13 +120,13 @@ class EventUpdateRequest:
                 return data
             try:
                 if not isinstance(data, str):
-                    raise TypeError
+                    raise TypeError()
                 ends_at_type_0 = isoparse(data)
 
                 return ends_at_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
-            return cast("datetime.datetime | None | Unset", data)
+            return cast(datetime.datetime | None | Unset, data)
 
         ends_at = _parse_ends_at(d.pop("ends_at", UNSET))
 
@@ -136,7 +135,7 @@ class EventUpdateRequest:
                 return data
             if isinstance(data, Unset):
                 return data
-            return cast("None | str | Unset", data)
+            return cast(None | str | Unset, data)
 
         location = _parse_location(d.pop("location", UNSET))
 
@@ -145,7 +144,7 @@ class EventUpdateRequest:
                 return data
             if isinstance(data, Unset):
                 return data
-            return cast("None | str | Unset", data)
+            return cast(None | str | Unset, data)
 
         description = _parse_description(d.pop("description", UNSET))
 

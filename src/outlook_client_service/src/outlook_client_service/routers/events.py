@@ -6,7 +6,7 @@ from typing import Annotated
 
 from calendar_client_api.client import Client
 from calendar_client_api.event import Event, EventPatch
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from outlook_client_service.dependencies import get_calendar_client
 from outlook_client_service.schemas.event import (
@@ -35,7 +35,7 @@ def list_events(
     client: Annotated[Client, Depends(get_calendar_client)],
     start: datetime | None = None,
     end: datetime | None = None,
-    types: list[str] | None = None,
+    types: Annotated[list[str] | None, Query()] = None,
 ) -> list[EventResponse]:
     """List calendar events, optionally filtered by start and end time."""
     try:

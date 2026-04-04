@@ -54,7 +54,7 @@ def _get_kwargs(
 
 
 def _parse_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response,
+    *, client: AuthenticatedClient | Client, response: httpx.Response
 ) -> CallbackAuthCallbackGetResponseCallbackAuthCallbackGet | HTTPValidationError | None:
     if response.status_code == 200:
         response_200 = CallbackAuthCallbackGetResponseCallbackAuthCallbackGet.from_dict(response.json())
@@ -68,11 +68,12 @@ def _parse_response(
 
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
-    return None
+    else:
+        return None
 
 
 def _build_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response,
+    *, client: AuthenticatedClient | Client, response: httpx.Response
 ) -> Response[CallbackAuthCallbackGetResponseCallbackAuthCallbackGet | HTTPValidationError]:
     return Response(
         status_code=HTTPStatus(response.status_code),
@@ -104,8 +105,8 @@ def sync_detailed(
 
     Returns:
         Response[CallbackAuthCallbackGetResponseCallbackAuthCallbackGet | HTTPValidationError]
-
     """
+
     kwargs = _get_kwargs(
         code=code,
         error=error,
@@ -141,8 +142,8 @@ def sync(
 
     Returns:
         CallbackAuthCallbackGetResponseCallbackAuthCallbackGet | HTTPValidationError
-
     """
+
     return sync_detailed(
         client=client,
         code=code,
@@ -173,8 +174,8 @@ async def asyncio_detailed(
 
     Returns:
         Response[CallbackAuthCallbackGetResponseCallbackAuthCallbackGet | HTTPValidationError]
-
     """
+
     kwargs = _get_kwargs(
         code=code,
         error=error,
@@ -208,8 +209,8 @@ async def asyncio(
 
     Returns:
         CallbackAuthCallbackGetResponseCallbackAuthCallbackGet | HTTPValidationError
-
     """
+
     return (
         await asyncio_detailed(
             client=client,

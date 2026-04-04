@@ -26,14 +26,14 @@ members = [
     "src/calendar_client_api",
     "src/outlook_client_impl",
     "src/outlook_client_service",
-    "src/outlook_client_service_client",
+    "src/outlook_client_service_api_client",
     "src/outlook_service_client_adapter",
 ]
 
 [tool.ruff]
 line-length = 130 # high for top level due to tests
 target-version = "py311"
-extend-exclude = ["src/outlook_client_service_client"]
+extend-exclude = ["src/outlook_client_service_api_client"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -56,7 +56,7 @@ ignore = [
 [tool.mypy]
 strict = true
 explicit_package_bases = true # Required for src layout
-exclude = "^src/outlook_client_service_client/"
+exclude = "^src/outlook_client_service_api_client/"
 mypy_path = [
     "src/calendar_client_api/src",
     "src/outlook_client_impl/src",
@@ -85,7 +85,7 @@ markers = [
 
 [tool.coverage.run]
 source = ["src"]
-omit = ["*/tests/*", "*/__main__.py", "src/outlook_client_service_client/*"]
+omit = ["*/tests/*", "*/__main__.py", "src/outlook_client_service_api_client/*"]
 
 [tool.coverage.report]
 fail_under = 85 # Justification: A high threshold ensures most code is tested.

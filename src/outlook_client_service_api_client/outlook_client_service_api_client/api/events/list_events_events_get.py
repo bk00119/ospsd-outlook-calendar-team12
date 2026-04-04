@@ -15,6 +15,7 @@ def _get_kwargs(
     *,
     start: datetime.datetime | None | Unset = UNSET,
     end: datetime.datetime | None | Unset = UNSET,
+    types: list[str] | None | Unset = UNSET,
 ) -> dict[str, Any]:
 
     params: dict[str, Any] = {}
@@ -37,6 +38,16 @@ def _get_kwargs(
         json_end = end
     params["end"] = json_end
 
+    json_types: list[str] | None | Unset
+    if isinstance(types, Unset):
+        json_types = UNSET
+    elif isinstance(types, list):
+        json_types = types
+
+    else:
+        json_types = types
+    params["types"] = json_types
+
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
     _kwargs: dict[str, Any] = {
@@ -49,7 +60,7 @@ def _get_kwargs(
 
 
 def _parse_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response,
+    *, client: AuthenticatedClient | Client, response: httpx.Response
 ) -> HTTPValidationError | list[EventResponse] | None:
     if response.status_code == 200:
         response_200 = []
@@ -68,11 +79,12 @@ def _parse_response(
 
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
-    return None
+    else:
+        return None
 
 
 def _build_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response,
+    *, client: AuthenticatedClient | Client, response: httpx.Response
 ) -> Response[HTTPValidationError | list[EventResponse]]:
     return Response(
         status_code=HTTPStatus(response.status_code),
@@ -87,6 +99,7 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
     start: datetime.datetime | None | Unset = UNSET,
     end: datetime.datetime | None | Unset = UNSET,
+    types: list[str] | None | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[EventResponse]]:
     """List Events
 
@@ -95,6 +108,7 @@ def sync_detailed(
     Args:
         start (datetime.datetime | None | Unset):
         end (datetime.datetime | None | Unset):
+        types (list[str] | None | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -102,11 +116,12 @@ def sync_detailed(
 
     Returns:
         Response[HTTPValidationError | list[EventResponse]]
-
     """
+
     kwargs = _get_kwargs(
         start=start,
         end=end,
+        types=types,
     )
 
     response = client.get_httpx_client().request(
@@ -121,6 +136,7 @@ def sync(
     client: AuthenticatedClient | Client,
     start: datetime.datetime | None | Unset = UNSET,
     end: datetime.datetime | None | Unset = UNSET,
+    types: list[str] | None | Unset = UNSET,
 ) -> HTTPValidationError | list[EventResponse] | None:
     """List Events
 
@@ -129,6 +145,7 @@ def sync(
     Args:
         start (datetime.datetime | None | Unset):
         end (datetime.datetime | None | Unset):
+        types (list[str] | None | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -136,12 +153,13 @@ def sync(
 
     Returns:
         HTTPValidationError | list[EventResponse]
-
     """
+
     return sync_detailed(
         client=client,
         start=start,
         end=end,
+        types=types,
     ).parsed
 
 
@@ -150,6 +168,7 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
     start: datetime.datetime | None | Unset = UNSET,
     end: datetime.datetime | None | Unset = UNSET,
+    types: list[str] | None | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[EventResponse]]:
     """List Events
 
@@ -158,6 +177,7 @@ async def asyncio_detailed(
     Args:
         start (datetime.datetime | None | Unset):
         end (datetime.datetime | None | Unset):
+        types (list[str] | None | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -165,11 +185,12 @@ async def asyncio_detailed(
 
     Returns:
         Response[HTTPValidationError | list[EventResponse]]
-
     """
+
     kwargs = _get_kwargs(
         start=start,
         end=end,
+        types=types,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -182,6 +203,7 @@ async def asyncio(
     client: AuthenticatedClient | Client,
     start: datetime.datetime | None | Unset = UNSET,
     end: datetime.datetime | None | Unset = UNSET,
+    types: list[str] | None | Unset = UNSET,
 ) -> HTTPValidationError | list[EventResponse] | None:
     """List Events
 
@@ -190,6 +212,7 @@ async def asyncio(
     Args:
         start (datetime.datetime | None | Unset):
         end (datetime.datetime | None | Unset):
+        types (list[str] | None | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -197,12 +220,13 @@ async def asyncio(
 
     Returns:
         HTTPValidationError | list[EventResponse]
-
     """
+
     return (
         await asyncio_detailed(
             client=client,
             start=start,
             end=end,
+            types=types,
         )
     ).parsed

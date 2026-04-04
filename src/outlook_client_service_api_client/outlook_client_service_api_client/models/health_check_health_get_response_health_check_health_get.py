@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, Self, TypeVar
+from typing import Any, TypeVar
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-T = TypeVar("T", bound="CallbackAuthCallbackGetResponseCallbackAuthCallbackGet")
+T = TypeVar("T", bound="HealthCheckHealthGetResponseHealthCheckHealthGet")
 
 
 @_attrs_define
-class CallbackAuthCallbackGetResponseCallbackAuthCallbackGet:
+class HealthCheckHealthGetResponseHealthCheckHealthGet:
     """ """
 
     additional_properties: dict[str, str] = _attrs_field(init=False, factory=dict)
@@ -23,12 +23,12 @@ class CallbackAuthCallbackGetResponseCallbackAuthCallbackGet:
         return field_dict
 
     @classmethod
-    def from_dict(cls, src_dict: Mapping[str, Any]) -> Self:
+    def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        callback_auth_callback_get_response_callback_auth_callback_get = cls()
+        health_check_health_get_response_health_check_health_get = cls()
 
-        callback_auth_callback_get_response_callback_auth_callback_get.additional_properties = d
-        return callback_auth_callback_get_response_callback_auth_callback_get
+        health_check_health_get_response_health_check_health_get.additional_properties = d
+        return health_check_health_get_response_health_check_health_get
 
     @property
     def additional_keys(self) -> list[str]:

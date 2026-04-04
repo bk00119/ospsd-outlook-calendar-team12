@@ -5,19 +5,19 @@ from datetime import datetime
 
 from calendar_client_api.client import Client
 from calendar_client_api.event import Event, EventPatch
-from outlook_client_service_client.api.events import (
+from outlook_client_service_api_client.api.events import (
     create_event_events_post,
     delete_event_events_event_id_delete,
     get_event_events_event_id_get,
     list_events_events_get,
     update_event_events_event_id_patch,
 )
-from outlook_client_service_client.client import Client as GeneratedClient
-from outlook_client_service_client.models.event_create_request import EventCreateRequest
-from outlook_client_service_client.models.event_response import EventResponse
-from outlook_client_service_client.models.event_update_request import EventUpdateRequest
-from outlook_client_service_client.models.http_validation_error import HTTPValidationError
-from outlook_client_service_client.types import Unset
+from outlook_client_service_api_client.client import Client as GeneratedClient
+from outlook_client_service_api_client.models.event_create_request import EventCreateRequest
+from outlook_client_service_api_client.models.event_response import EventResponse
+from outlook_client_service_api_client.models.event_update_request import EventUpdateRequest
+from outlook_client_service_api_client.models.http_validation_error import HTTPValidationError
+from outlook_client_service_api_client.types import Unset
 
 import calendar_client_api
 
@@ -120,13 +120,14 @@ class ServiceClientAdapter(Client):
         *,
         start: datetime | None = None,
         end: datetime | None = None,
-        types: list[str] | None = None,  # noqa: ARG002 — required by Client ABC; generated client does not support type filtering
+        types: list[str] | None = None,
     ) -> list[Event]:
         """Return a list of calendar events, with optional filters."""
         result = list_events_events_get.sync(
             client=self._client,
             start=start,
             end=end,
+            types=types,
         )
         if result is None:
             return []
