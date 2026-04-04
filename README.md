@@ -28,20 +28,27 @@ Implementation is injected into the contract at runtime through Dependency Injec
 - `calendar_client_api`: Defines the abstract base class, `Client`, which is the contract of what the interface of a calendar client can do
 - `outlook_client_impl`: Implements the `OutlookClient` class - a concrete implementation of the Calendar Client that uses Microsoft Graph to perform contract actions on Outlook Calendar
 
+### Service Components
+- `outlook_client_service`: FastAPI service that exposes the calendar operations over HTTP with OAuth 2.0 authentication
+- `outlook_client_service_api_client`: Auto-generated Python client created from the service's OpenAPI spec
+- `outlook_service_client_adapter`: Adapter that implements the `Client` ABC by delegating to the generated client, enabling location-transparent usage
+
 ### Project Structure
 ```
 OSPSD-OUTLOOK-CALENDAR-TEAM12/
-├── src/                          # Source packages (uv workspace members)
-│   ├── calendar_client_api/      # Abstract calendar client base class (ABC)
-│   └── outlook_client_impl/      # Outlook Calendar specific client implementation
-├── tests/                        # Integration and E2E tests
-│   ├── integration/              # Component integration tests
-│   └── e2e/                      # End-to-end application tests
-├── docs/                         # Documentation source files
-├── .circleci/                    # CircleCI configuration
-├── main.py                       # Main application entry point
-├── pyproject.toml                # Project configuration (dependencies, tools)
-└── uv.lock                       # Locked dependency versions
+├── src/
+│   ├── calendar_client_api/              # Abstract client interface (ABC)
+│   ├── outlook_client_impl/              # Microsoft Graph implementation
+│   ├── outlook_client_service/           # FastAPI service
+│   ├── outlook_client_service_api_client/# Auto-generated HTTP client
+│   └── outlook_service_client_adapter/   # Adapter back to Client ABC
+├── tests/
+│   ├── integration/                      # DI wiring and adapter integration tests
+│   └── e2e/                              # End-to-end tests
+├── docs/                                 # MkDocs documentation source
+├── .circleci/                            # CircleCI configuration
+├── pyproject.toml                        # Workspace config (dependencies, tools)
+└── uv.lock                              # Locked dependency versions
 ```
 
 ## Project Setup
@@ -130,6 +137,34 @@ OSPSD-OUTLOOK-CALENDAR-TEAM12/
     uv run mkdocs serve
     ```
     Open your browser to `http://127.0.0.1:8000` to view the site.
+
+## Running the Service Locally
+
+```bash
+uv run uvicorn outlook_client_service.main:app --reload
+```
+
+The service will be available at `http://localhost:8000`. Visit `/docs` for the interactive API documentation.
+
+**Required environment variables:**
+
+| Variable | Description |
+|----------|-------------|
+| `AZURE_CLIENT_ID` | Azure app registration client ID |
+| `AZURE_CLIENT_SECRET` | Azure app registration client secret |
+| `AZURE_AUTHORITY` | `https://login.microsoftonline.com/consumers` |
+| `SESSION_SECRET_KEY` | Secret key for session middleware |
+| `CORS_ORIGINS` | Comma-separated allowed origins |
+
+## Deployment
+
+The service is deployed on [Render](https://render.com):
+
+- **URL**: `https://ospsd-outlook-calendar-team12.onrender.com`
+- **Health check**: `https://ospsd-outlook-calendar-team12.onrender.com/health`
+- **OpenAPI spec**: `https://ospsd-outlook-calendar-team12.onrender.com/openapi.json`
+
+Render automatically deploys on push to the `hw-2` branch. Secrets are managed through Render's environment variable settings.
 
 ## Continuous Integration
 

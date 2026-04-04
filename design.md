@@ -18,7 +18,7 @@ This separation keeps consumer code dependent on a stable calendar interface rat
 HW2 keeps the HW1 packages and adds three new layers:
 
 - `outlook_client_service`: a FastAPI service that exposes the calendar operations over HTTP. It also provides OAuth routes and a `/health` endpoint.
-- `outlook_client_service_client`: an auto-generated Python client created from the FastAPI OpenAPI schema. This package handles typed request and response models for the service.
+- `outlook_client_service_api_client`: an auto-generated Python client created from the FastAPI OpenAPI schema. This package handles typed request and response models for the service.
 - `outlook_service_client_adapter`: an adapter that implements the original `calendar_client_api.Client` contract by delegating to the generated HTTP client.
 
 ### Resulting System
@@ -28,7 +28,7 @@ The full workspace has five packages:
 1. `calendar_client_api`
 2. `outlook_client_impl`
 3. `outlook_client_service`
-4. `outlook_client_service_client`
+4. `outlook_client_service_api_client`
 5. `outlook_service_client_adapter`
 
 The design goal is location transparency. A caller can program against `calendar_client_api.Client` and use either:
@@ -63,6 +63,21 @@ HW2 inserts a service boundary while keeping the same abstract interface. A `get
 9. The adapter maps the generated model back into an object implementing the original `Event` contract.
 
 This path preserves the same caller-facing API while moving the implementation behind a network boundary.
+
+### Sample API Response
+
+A `GET /events/{event_id}` request returns:
+
+```json
+{
+  "id": "AAMkAGQ2...",
+  "title": "Team Standup",
+  "starts_at": "2026-04-03T14:00:00+00:00",
+  "ends_at": "2026-04-03T15:00:00+00:00",
+  "location": "Room 101",
+  "description": "Weekly sync"
+}
+```
 
 ### Authentication in the Flow
 
@@ -99,6 +114,20 @@ The FastAPI service exposes HTTP endpoints for the core calendar operations plus
 - expose operational endpoints such as `/health`
 
 When the implementation raises an exception, the service wraps that failure as an HTTP error response instead of leaking internal exceptions directly to the client.
+
+### Endpoints
+
+| Method | Path | Request Body | Response | Status |
+|--------|------|-------------|----------|--------|
+| GET | `/events/` | — | `EventResponse[]` | 200 |
+| POST | `/events/` | `EventCreateRequest` | `EventResponse` | 201 |
+| GET | `/events/{event_id}` | — | `EventResponse` | 200 |
+| PATCH | `/events/{event_id}` | `EventUpdateRequest` | `EventResponse` | 200 |
+| DELETE | `/events/{event_id}` | — | — | 204 |
+| GET | `/auth/login` | — | Redirect to Microsoft | 302 |
+| GET | `/auth/callback` | — | Session cookie set | 200 |
+| POST | `/auth/logout` | — | Session cleared | 200 |
+| GET | `/health` | — | `{"status": "ok"}` | 200 |
 
 ### Generated Client Layer
 
@@ -149,7 +178,7 @@ event = client.get_event(event_id)
 ### Remote Service Usage Through the Adapter
 
 ```python
-from outlook_client_service_client.client import Client as GeneratedClient
+from outlook_client_service_api_client.client import Client as GeneratedClient
 from outlook_service_client_adapter.adapter import ServiceClientAdapter
 
 generated = GeneratedClient(base_url="http://localhost:8000")
@@ -188,3 +217,16 @@ This layered strategy is especially important in HW2 because the system now cont
 - generated client model to `Event` contract through the adapter
 
 Testing each boundary independently makes it easier to identify where a regression occurred.
+
+### Mocking Strategy
+
+- **Unit tests** mock external boundaries. Adapter tests patch the generated client module functions (`delete_event_events_event_id_delete.sync`, etc.) so no HTTP calls are made. Implementation tests mock `GraphServiceClient` to avoid real Microsoft Graph calls. Service tests use FastAPI's `TestClient` with a mocked `OutlookClient` injected via `Depends` override.
+- **Integration tests** use `httpx.MockTransport` to simulate real HTTP responses without a running server. This verifies the full adapter → generated client → HTTP path with controlled responses, testing serialization and deserialization across the boundary.
+- **E2E tests** run against the real Microsoft Graph API with no mocks, gated behind environment variables (`E2E=1`) and disabled by default.
+
+### Interface Compliance
+
+The adapter is verified as a correct implementation of the `Client` ABC through two mechanisms:
+
+1. **Static type checking**: `mypy --strict` verifies that `ServiceClientAdapter` implements all abstract methods with compatible signatures. Any missing or mistyped method is caught at analysis time.
+2. **Integration tests**: The DI wiring test imports the adapter package, which triggers `register()`, then asserts that `calendar_client_api.get_client()` returns a `ServiceClientAdapter` instance. Adapter unit tests verify that each method delegates correctly and maps responses into `Event`-compatible objects.
