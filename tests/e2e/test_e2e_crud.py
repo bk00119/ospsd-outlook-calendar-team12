@@ -20,6 +20,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 import pytest
+from calendar_client_api.exceptions import (
+    CalendarNotFoundError,
+    CalendarValidationError,
+)
 
 from calendar_client_api import event
 
@@ -154,13 +158,8 @@ def test_delete_then_get_event_not_found(
     with contextlib.suppress(ValueError):
         created_event_ids.remove(created_id)
 
-    with pytest.raises(Exception, match=r"404|ErrorItemNotFound") as excinfo:
+    with pytest.raises(CalendarNotFoundError):
         client.get_event(created_id)
-
-    # Graph SDK raises an ODataError / APIError for missing items (404 / ErrorItemNotFound).
-    msg = str(excinfo.value)
-    assert "404" in msg
-    assert "ErrorItemNotFound" in msg
 
 
 def test_update_rejects_empty_patch_payload(
@@ -185,5 +184,5 @@ def test_update_rejects_empty_patch_payload(
     assert created_id
     created_event_ids.append(created_id)
 
-    with pytest.raises(ValueError, match=r".*"):
+    with pytest.raises(CalendarValidationError):
         client.update_event(created_id, event.EventPatch())

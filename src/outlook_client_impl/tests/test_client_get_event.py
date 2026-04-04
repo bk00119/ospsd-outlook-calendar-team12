@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
+from calendar_client_api.exceptions import CalendarNotFoundError
 from outlook_client_impl.outlook_impl import OutlookClient, get_client_impl
 
 if TYPE_CHECKING:
@@ -168,7 +169,7 @@ def test_get_event_raises_when_payload_missing() -> None:
     service = ServiceStub(payload=None)
     client = _client_with_service(service)
 
-    with pytest.raises(RuntimeError, match="not found"):
+    with pytest.raises(CalendarNotFoundError, match="not found"):
         client.get_event("event-404")
 
 

@@ -105,7 +105,7 @@ class TestGetEvent:
         """Raise CalendarServiceError when generated get returns no payload."""
         mock_get.sync.return_value = None
 
-        with pytest.raises(CalendarServiceError, match="get_event returned no response payload"):
+        with pytest.raises(CalendarNotFoundError, match="not found"):
             self.adapter.get_event(self.event_id)
 
     @patch("outlook_service_client_adapter.adapter.get_event_events_event_id_get")

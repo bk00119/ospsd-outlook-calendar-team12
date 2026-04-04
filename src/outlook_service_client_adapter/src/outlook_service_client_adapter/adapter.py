@@ -1,5 +1,6 @@
 """Service client adapter — implements the Client ABC via the auto-generated service client."""
 
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from http import HTTPStatus
@@ -28,6 +29,23 @@ from outlook_client_service_api_client.types import Unset
 
 import calendar_client_api
 from outlook_client_service_api_client import errors as generated_errors
+
+
+def _get_service_base_url() -> str:
+    """Return the configured base URL for the Outlook client service."""
+    return os.getenv(
+        "OUTLOOK_CLIENT_SERVICE_BASE_URL",
+        os.getenv("BASE_URL", "http://localhost:8000"),
+    )
+
+
+
+def _get_service_cookies() -> dict[str, str] | None:
+    """Return optional service session cookies for authenticated adapter E2E runs."""
+    session_cookie = os.getenv("OUTLOOK_CLIENT_SERVICE_SESSION")
+    if not session_cookie:
+        return None
+    return {"session": session_cookie}
 
 
 @dataclass(frozen=True)
@@ -142,8 +160,8 @@ class ServiceClientAdapter(Client):
             self._raise_mapped_http_error("get_event", exc)
 
         if result is None:
-            msg = "get_event returned no response payload."
-            raise CalendarServiceError(msg)
+            msg = f"get_event failed: event {event_id} was not found."
+            raise CalendarNotFoundError(msg)
         if isinstance(result, HTTPValidationError):
             msg = f"get_event validation failed: {result.to_dict()}"
             raise CalendarValidationError(msg)
@@ -235,7 +253,15 @@ class ServiceClientAdapter(Client):
 
 def get_client_impl(*, interactive: bool = False) -> Client:  # noqa: ARG001
     """Return a configured ServiceClientAdapter instance."""
-    generated = GeneratedClient(base_url="http://localhost:8000")
+    cookies = _get_service_cookies()
+    if cookies is None:
+        generated = GeneratedClient(base_url=_get_service_base_url())
+    else:
+        generated = GeneratedClient(
+            base_url=_get_service_base_url(),
+            cookies=cookies,
+        )
+
     return ServiceClientAdapter(generated)
 
 

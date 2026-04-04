@@ -7,14 +7,22 @@ The implementation supports multiple authentication modes:
     - Local token file (for development)
     - Interactive OAuth flow (for initial setup)
 """
+
+from __future__ import annotations
+
 import asyncio
 import datetime
 import inspect
 import json
 import os
 from collections.abc import Callable, Coroutine, Mapping
-from typing import Any, ClassVar, TypeVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, cast
 
+from calendar_client_api.client import Client
+from calendar_client_api.exceptions import (
+    CalendarNotFoundError,
+    CalendarValidationError,
+)
 from dotenv import load_dotenv
 from kiota_serialization_json.json_serialization_writer import JsonSerializationWriter
 from msgraph.generated.models.body_type import BodyType
@@ -22,18 +30,23 @@ from msgraph.generated.models.date_time_time_zone import DateTimeTimeZone
 from msgraph.generated.models.event import Event as GraphEvent
 from msgraph.generated.models.item_body import ItemBody
 from msgraph.generated.models.location import Location
-from msgraph.graph_service_client import GraphServiceClient
+from msgraph.generated.models.o_data_errors.o_data_error import ODataError
 
 import calendar_client_api
-from calendar_client_api import event
 from outlook_client_impl.auth_manager import AuthManager
+from outlook_client_impl.event_impl import get_event_impl
+
+if TYPE_CHECKING:
+    from calendar_client_api.event import Event, EventPatch
+    from msgraph.graph_service_client import GraphServiceClient
+
 
 T = TypeVar("T")
 
 load_dotenv()
 
 
-class OutlookClient(calendar_client_api.Client):
+class OutlookClient(Client):
     """Concrete implementation of the Client abstraction using Outlook API."""
 
     def _extract_item_id(self, item: object) -> str:
@@ -240,7 +253,7 @@ class OutlookClient(calendar_client_api.Client):
             raise RuntimeError(msg)
         return event_id.strip()
 
-    def _build_patch_event(self, payload: event.EventPatch) -> GraphEvent:
+    def _build_patch_event(self, payload: EventPatch) -> GraphEvent:
         """Build a Microsoft Graph PATCH body from an EventPatch.
 
         Notes:
@@ -285,7 +298,7 @@ class OutlookClient(calendar_client_api.Client):
 
         if empty_payload:
             msg = "payload must update at least one field."
-            raise ValueError(msg)
+            raise CalendarValidationError(msg)
 
         return ev
 
@@ -327,8 +340,19 @@ class OutlookClient(calendar_client_api.Client):
         result = cast("Callable[[object], object]", method)(body)
         return self._run_maybe_awaitable(result)
 
+    NOT_FOUND_STATUS: ClassVar[int] = 404
 
-    def get_event(self, event_id: str) -> event.Event:
+    def _is_not_found_error(self, exc: ODataError) -> bool:
+        """Return whether an ODataError represents a missing event."""
+        response_status = getattr(exc, "response_status_code", None)
+        if response_status == self.NOT_FOUND_STATUS:
+            return True
+
+        main_error = getattr(exc, "error", None)
+        error_code = getattr(main_error, "code", None)
+        return error_code == "ErrorItemNotFound"
+
+    def get_event(self, event_id: str) -> Event:
         """Retrieve a specific event by its ID.
 
         Args:
@@ -351,14 +375,23 @@ class OutlookClient(calendar_client_api.Client):
             msg = "Outlook client not configured with a service instance."
             raise RuntimeError(msg)
 
-        payload = self._fetch_provider_payload(service=service, event_id=clean_event_id)
+        try:
+            payload = self._fetch_provider_payload(
+                service=service,
+                event_id=clean_event_id,
+            )
+        except ODataError as exc:
+            if self._is_not_found_error(exc):
+                msg = f"Event '{clean_event_id}' was not found."
+                raise CalendarNotFoundError(msg) from exc
+            raise
 
         if payload is None:
             msg = f"Event '{clean_event_id}' was not found."
-            raise RuntimeError(msg)
+            raise CalendarNotFoundError(msg)
 
         raw_data = self._serialize_provider_payload(payload)
-        return event.get_event(event_id=clean_event_id, raw_data=raw_data)
+        return get_event_impl(event_id=clean_event_id, raw_data=raw_data)
 
     def _fetch_raw_items(self) -> list[object]:
         """Fetch raw event items from the Graph API.
@@ -405,7 +438,7 @@ class OutlookClient(calendar_client_api.Client):
         start: datetime.datetime | None = None,
         end: datetime.datetime | None = None,
         types: list[str] | None = None,
-    ) -> list[event.Event]:
+    ) -> list[Event]:
         """Return a filtered list of calendar events from Outlook.
 
         Args:
@@ -423,14 +456,14 @@ class OutlookClient(calendar_client_api.Client):
         """
         raw_items = self._fetch_raw_items()
 
-        results: list[event.Event] = []
+        results: list[Event] = []
         for item in raw_items:
             if types is not None and self._extract_item_type(item) not in types:
                 continue
 
             item_id = self._extract_item_id(item)
             raw_data = self._serialize_provider_payload(item)
-            ev = event.get_event(event_id=item_id, raw_data=raw_data)
+            ev = get_event_impl(event_id=item_id, raw_data=raw_data)
 
             if start is not None and ev.starts_at < start:
                 continue
@@ -447,7 +480,7 @@ class OutlookClient(calendar_client_api.Client):
         ends_at: datetime.datetime,
         location: str | None = None,
         description: str | None = None,
-    ) -> event.Event:
+    ) -> Event:
         """Create a new event in Outlook and return the created event.
 
         Args:
@@ -496,7 +529,7 @@ class OutlookClient(calendar_client_api.Client):
 
         raw_data = self._serialize_provider_payload(created_payload)
         created_event_id = self._extract_event_id(created_payload, raw_data)
-        return event.get_event(event_id=created_event_id, raw_data=raw_data)
+        return get_event_impl(event_id=created_event_id, raw_data=raw_data)
 
     def delete_event(self, event_id: str) -> None:
         """Delete a specific event by its ID.
@@ -515,7 +548,7 @@ class OutlookClient(calendar_client_api.Client):
 
         self._run(self.service.me.events.by_event_id(clean_event_id).delete())
 
-    def update_event(self, event_id: str, payload: event.EventPatch) -> event.Event:
+    def update_event(self, event_id: str, payload: EventPatch) -> Event:
         """Update an event by id in Outlook and return the updated event.
 
         Args:
@@ -552,13 +585,13 @@ class OutlookClient(calendar_client_api.Client):
         # Prefer that payload to avoid an extra GET; fall back if provider returns None.
         if updated_payload is not None:
             raw_data = self._serialize_provider_payload(updated_payload)
-            return event.get_event(event_id=clean_event_id, raw_data=raw_data)
+            return get_event_impl(event_id=clean_event_id, raw_data=raw_data)
 
         return self.get_event(clean_event_id)
 
 
 
-def get_client_impl(*, interactive: bool = False) -> calendar_client_api.Client:
+def get_client_impl(*, interactive: bool = False) -> Client:
     """Return a configured :class:`OutlookClient` instance."""
     return OutlookClient(interactive=interactive)
 
