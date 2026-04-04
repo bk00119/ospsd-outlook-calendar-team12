@@ -8,6 +8,8 @@ from calendar_client_api.event import Event, EventPatch
 from outlook_client_service_client.api.events import (
     create_event_events_post,
     delete_event_events_event_id_delete,
+    get_event_events_event_id_get,
+    list_events_events_get,
     update_event_events_event_id_patch,
 )
 from outlook_client_service_client.client import Client as GeneratedClient
@@ -16,6 +18,8 @@ from outlook_client_service_client.models.event_response import EventResponse
 from outlook_client_service_client.models.event_update_request import EventUpdateRequest
 from outlook_client_service_client.models.http_validation_error import HTTPValidationError
 from outlook_client_service_client.types import Unset
+
+import calendar_client_api
 
 
 @dataclass(frozen=True)
@@ -99,17 +103,37 @@ class ServiceClientAdapter(Client):
 
     def get_event(self, event_id: str) -> Event:
         """Return an event by its ID."""
-        raise NotImplementedError
+        result = get_event_events_event_id_get.sync(
+            event_id=event_id,
+            client=self._client,
+        )
+        if result is None:
+            msg = "get_event returned no response payload."
+            raise RuntimeError(msg)
+        if isinstance(result, HTTPValidationError):
+            msg = f"get_event validation failed: {result.to_dict()}"
+            raise TypeError(msg)
+        return self._event_from_response(result)
 
     def list_events(
         self,
         *,
         start: datetime | None = None,
         end: datetime | None = None,
-        types: list[str] | None = None,
+        types: list[str] | None = None,  # noqa: ARG002 — required by Client ABC; generated client does not support type filtering
     ) -> list[Event]:
         """Return a list of calendar events, with optional filters."""
-        raise NotImplementedError
+        result = list_events_events_get.sync(
+            client=self._client,
+            start=start,
+            end=end,
+        )
+        if result is None:
+            return []
+        if isinstance(result, HTTPValidationError):
+            msg = f"list_events validation failed: {result.to_dict()}"
+            raise TypeError(msg)
+        return [self._event_from_response(ev) for ev in result]
 
     def create_event(
         self,
@@ -161,3 +185,12 @@ class ServiceClientAdapter(Client):
             raise TypeError(msg)
         return self._event_from_response(result)
 
+def get_client_impl(*, interactive: bool = False) -> Client:  # noqa: ARG001 — required by get_client signature; adapter has no interactive auth mode
+    """Return a configured ServiceClientAdapter instance."""
+    generated = GeneratedClient(base_url="http://localhost:8000")
+    return ServiceClientAdapter(generated)
+
+
+def register() -> None:
+    """Register the adapter with the calendar client API."""
+    calendar_client_api.get_client = get_client_impl
