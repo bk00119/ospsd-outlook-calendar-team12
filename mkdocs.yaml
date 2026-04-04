@@ -1,0 +1,44 @@
+site_name: Outlook Calendar Client
+site_description: "A component-based calendar client API with Outlook implementation"
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Component Definition: component.md
+  - API Reference:
+      - Calendar Client API: api/calendar_client_api.md
+      - Outlook Implementation: api/outlook_client_impl.md
+  - Guides:
+      - Testing: testing.md
+      - CircleCI Setup: circleci-setup.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+
+plugins:
+  - mkdocstrings:
+      handlers:
+        python:
+          paths:
+            - src/calendar_client_api/src
+            - src/outlook_client_impl/src
+          options:
+            show_source: false
+            docstring_section_style: spacy
+            members_order: source

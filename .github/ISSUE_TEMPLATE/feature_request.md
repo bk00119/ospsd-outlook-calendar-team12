@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea or enhancement for the email assistant system
+about: Suggest an idea or enhancement for the calendar assistant system
 title: "[FEATURE] "
 labels: ["enhancement", "needs-discussion"]
 assignees: ""
@@ -14,8 +14,8 @@ assignees: ""
 
 **Component(s) Affected:**
 
-- [ ] `mail_client_api` - Mail client abstraction (new operations)
-- [ ] `gmail_message_impl` - Gmail message implementation
+- [ ] `calendar_client_api` - Calendar client abstraction (new operations)
+- [ ] `outlook_client_impl` - Outlook client implementation
 - [ ] New component (specify name)
 - [ ] Testing infrastructure
 - [ ] CI/CD pipeline
@@ -47,7 +47,7 @@ Detailed description of the proposed feature:
 
 ```python
 # Show how the new feature would be used
-from mail_client_api import get_client
+from calendar_client_api import get_client
 
 client = get_client()
 # Example of new functionality
@@ -126,9 +126,7 @@ result = client.new_feature_method(parameters)
 
 **Pros:**
 
--
-
-**Cons:**
+- **Cons:**
 
 -
 
@@ -138,9 +136,7 @@ result = client.new_feature_method(parameters)
 
 **Pros:**
 
--
-
-**Cons:**
+- **Cons:**
 
 -
 
@@ -176,7 +172,7 @@ Explain why the main proposal is preferred over alternatives:
 ### Integration Testing
 
 - [ ] Test component interactions
-- [ ] Test with real Gmail API (if applicable)
+- [ ] Test with real Outlook API (if applicable)
 - [ ] Test authentication flows
 
 ### End-to-End Testing
@@ -260,7 +256,7 @@ result = new_feature.do_something()
 
 ```python
 # Example 2: Advanced usage
-from mail_client_api import get_client
+from calendar_client_api import get_client
 
 client = get_client()
 advanced_result = client.advanced_feature(

@@ -1,0 +1,32 @@
+[project]
+name = "outlook-client-impl"
+version = "0.1.0"
+description = "A Python client library for interacting with Outlook calendar APIs"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "python-dotenv>=1.0.0",
+    "calendar-client-api",
+    "msal",
+    "msgraph-sdk",
+    "azure-identity",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-mock>=3.10.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/outlook_client_impl"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/outlook_client_impl/py.typed" = "outlook_client_impl/py.typed"
+
+[tool.uv.sources]
+calendar-client-api = { workspace = true }
