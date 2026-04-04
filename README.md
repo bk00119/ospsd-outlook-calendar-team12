@@ -164,11 +164,22 @@ The service is deployed on [Render](https://render.com):
 - **Health check**: `https://ospsd-outlook-calendar-team12.onrender.com/health`
 - **OpenAPI spec**: `https://ospsd-outlook-calendar-team12.onrender.com/openapi.json`
 
-Render automatically deploys on push to the `hw-2` branch. Secrets are managed through Render's environment variable settings.
+Secrets are managed through Render's environment variable settings.
 
-## Continuous Integration
+## Continuous Integration & Deployment
 
 The project uses CircleCI (`.circleci/config.yml`) with two workflows:
 
 - **All Branches**: Build, lint, unit tests, and CI-compatible integration tests
 - **Main/Develop**: Additional integration tests with real Microsoft Graph API calls using credentials from the `outlook-client` CircleCI context
+
+**Automatic Deployment**: Every push to the `hw-2` branch triggers the full CI pipeline in CircleCI. After lint and tests pass, CircleCI triggers a Render deploy via a deploy hook. This ensures only passing builds are deployed.
+
+**CI/CD Environment Variables** (set in CircleCI project settings):
+
+| Variable | Description |
+|----------|-------------|
+| `RENDER_DEPLOY_HOOK_URL` | Render deploy hook URL (from Render Dashboard > Service > Settings > Deploy Hook) |
+| `AZURE_CLIENT_ID` | Azure app registration client ID |
+| `AZURE_CLIENT_SECRET` | Azure app registration client secret |
+| `AZURE_TENANT_ID` | Azure tenant ID |
