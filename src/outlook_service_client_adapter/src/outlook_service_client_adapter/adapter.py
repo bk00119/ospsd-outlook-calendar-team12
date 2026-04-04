@@ -18,6 +18,8 @@ from outlook_client_service_client.models.event_update_request import EventUpdat
 from outlook_client_service_client.models.http_validation_error import HTTPValidationError
 from outlook_client_service_client.types import Unset
 
+import calendar_client_api
+
 
 @dataclass(frozen=True)
 class AdapterEvent(Event):
@@ -107,7 +109,7 @@ class ServiceClientAdapter(Client):
         *,
         start: datetime | None = None,
         end: datetime | None = None,
-        types: list[str] | None = None,
+        types: list[str] | None = None,  # noqa: ARG002 — required by Client ABC signature; generated client does not support type filtering
     ) -> list[Event]:
         """Return a list of calendar events, with optional filters."""
         result = list_events_events_get.sync(
@@ -172,3 +174,12 @@ class ServiceClientAdapter(Client):
             raise TypeError(msg)
         return self._event_from_response(result)
 
+def get_client_impl(*, interactive: bool = False) -> Client:  # noqa: ARG001 — required by get_client signature; adapter has no interactive auth mode
+    """Return a configured ServiceClientAdapter instance."""
+    generated = GeneratedClient(base_url="http://localhost:8000")
+    return ServiceClientAdapter(generated)
+
+
+def register() -> None:
+    """Register the adapter with the calendar client API."""
+    calendar_client_api.get_client = get_client_impl
