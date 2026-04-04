@@ -149,11 +149,13 @@ and may return `None` for undocumented responses when unexpected statuses are no
 The adapter exists to prevent HTTP-specific behavior from leaking into application code. It translates generated-client outputs into normal Python behavior:
 
 - successful responses are mapped into objects implementing the `Event` contract
-- validation responses become `TypeError`
-- missing or unusable payloads become `RuntimeError`
-- transport exceptions from the generated client are allowed to propagate
+- validation responses become `CalendarValidationError`
+- missing or unusable payloads become `CalendarServiceError`
+- HTTP 404 responses become `CalendarNotFoundError`
+- authentication failures become `CalendarAuthError`
+- transport exceptions from the generated client are translated via `_raise_mapped_http_error`
 
-This keeps callers working with Python exceptions and domain objects rather than raw HTTP responses.
+These domain exceptions are defined in `calendar_client_api.exceptions`, keeping error handling consistent whether using the local implementation or the remote adapter.
 
 ## 4. Adapter Pattern Rationale With Code Comparison
 
