@@ -341,7 +341,7 @@ class TestListEvents:
                 ends_at=self.ends_at,
                 location=None,
                 description=None,
-            )
+            ),
         ]
 
         self.adapter.list_events(start=self.starts_at, end=self.ends_at)
@@ -363,7 +363,7 @@ class TestListEvents:
                 ends_at=self.ends_at,
                 location=None,
                 description=None,
-            )
+            ),
         ]
 
         events = self.adapter.list_events()

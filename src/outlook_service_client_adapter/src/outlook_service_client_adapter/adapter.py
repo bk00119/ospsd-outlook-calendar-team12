@@ -19,6 +19,8 @@ from outlook_client_service_client.models.event_update_request import EventUpdat
 from outlook_client_service_client.models.http_validation_error import HTTPValidationError
 from outlook_client_service_client.types import Unset
 
+import calendar_client_api
+
 
 @dataclass(frozen=True)
 class AdapterEvent(Event):
@@ -182,3 +184,13 @@ class ServiceClientAdapter(Client):
             msg = f"update_event validation failed: {result.to_dict()}"
             raise TypeError(msg)
         return self._event_from_response(result)
+
+def get_client_impl(*, interactive: bool = False) -> Client:  # noqa: ARG001 — required by get_client signature; adapter has no interactive auth mode
+    """Return a configured ServiceClientAdapter instance."""
+    generated = GeneratedClient(base_url="http://localhost:8000")
+    return ServiceClientAdapter(generated)
+
+
+def register() -> None:
+    """Register the adapter with the calendar client API."""
+    calendar_client_api.get_client = get_client_impl
