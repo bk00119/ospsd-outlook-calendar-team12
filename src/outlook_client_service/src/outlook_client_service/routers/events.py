@@ -4,11 +4,11 @@ from datetime import datetime
 from http import HTTPStatus
 from typing import Annotated
 
+from calendar_client_api.client import Client
 from calendar_client_api.event import Event, EventPatch
 from fastapi import APIRouter, Depends, HTTPException, status
-from outlook_client_impl.outlook_impl import OutlookClient
 
-from outlook_client_service.dependencies import get_outlook_client
+from outlook_client_service.dependencies import get_calendar_client
 from outlook_client_service.schemas.event import (
     EventCreateRequest,
     EventResponse,
@@ -32,7 +32,7 @@ def _to_event_response(event: Event) -> EventResponse:
 
 @router.get("/")
 def list_events(
-    client: Annotated[OutlookClient, Depends(get_outlook_client)],
+    client: Annotated[Client, Depends(get_calendar_client)],
     start: datetime | None = None,
     end: datetime | None = None,
 ) -> list[EventResponse]:
@@ -47,7 +47,7 @@ def list_events(
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_event(
     event: EventCreateRequest,
-    client: Annotated[OutlookClient, Depends(get_outlook_client)],
+    client: Annotated[Client, Depends(get_calendar_client)],
 ) -> EventResponse:
     """Create a new event."""
     try:
@@ -67,7 +67,7 @@ def create_event(
 def update_event(
     event_id: str,
     event: EventUpdateRequest,
-    client: Annotated[OutlookClient, Depends(get_outlook_client)],
+    client: Annotated[Client, Depends(get_calendar_client)],
 ) -> EventResponse:
     """Update an existing event record partially."""
     patch = EventPatch(
@@ -85,7 +85,7 @@ def update_event(
 
 
 @router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_event(event_id: str, client: Annotated[OutlookClient, Depends(get_outlook_client)]) -> None:
+def delete_event(event_id: str, client: Annotated[Client, Depends(get_calendar_client)]) -> None:
     """Delete an event."""
     try:
         client.delete_event(event_id=event_id)
@@ -94,7 +94,7 @@ def delete_event(event_id: str, client: Annotated[OutlookClient, Depends(get_out
 
 
 @router.get("/{event_id}")
-def get_event(event_id: str, client: Annotated[OutlookClient, Depends(get_outlook_client)]) -> EventResponse:
+def get_event(event_id: str, client: Annotated[Client, Depends(get_calendar_client)]) -> EventResponse:
     """Get an event by ID."""
     try:
         event = client.get_event(event_id=event_id)
