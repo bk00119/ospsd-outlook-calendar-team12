@@ -22,9 +22,7 @@ def _get_kwargs() -> dict[str, Any]:
 
 
 def _parse_response(
-    *,
-    client: AuthenticatedClient | Client,
-    response: httpx.Response,
+    *, client: AuthenticatedClient | Client, response: httpx.Response
 ) -> HealthCheckHealthGetResponseHealthCheckHealthGet | None:
     if response.status_code == 200:
         response_200 = HealthCheckHealthGetResponseHealthCheckHealthGet.from_dict(response.json())
@@ -33,13 +31,12 @@ def _parse_response(
 
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
-    return None
+    else:
+        return None
 
 
 def _build_response(
-    *,
-    client: AuthenticatedClient | Client,
-    response: httpx.Response,
+    *, client: AuthenticatedClient | Client, response: httpx.Response
 ) -> Response[HealthCheckHealthGetResponseHealthCheckHealthGet]:
     return Response(
         status_code=HTTPStatus(response.status_code),
@@ -63,8 +60,8 @@ def sync_detailed(
 
     Returns:
         Response[HealthCheckHealthGetResponseHealthCheckHealthGet]
-
     """
+
     kwargs = _get_kwargs()
 
     response = client.get_httpx_client().request(
@@ -88,8 +85,8 @@ def sync(
 
     Returns:
         HealthCheckHealthGetResponseHealthCheckHealthGet
-
     """
+
     return sync_detailed(
         client=client,
     ).parsed
@@ -109,8 +106,8 @@ async def asyncio_detailed(
 
     Returns:
         Response[HealthCheckHealthGetResponseHealthCheckHealthGet]
-
     """
+
     kwargs = _get_kwargs()
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -132,8 +129,8 @@ async def asyncio(
 
     Returns:
         HealthCheckHealthGetResponseHealthCheckHealthGet
-
     """
+
     return (
         await asyncio_detailed(
             client=client,

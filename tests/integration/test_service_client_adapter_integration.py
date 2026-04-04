@@ -99,7 +99,7 @@ def test_get_event_over_generated_client() -> None:
 
 
 def test_list_events_over_generated_client() -> None:
-    """List events via adapter and verify query mapping for start/end."""
+    """List events via adapter and verify query mapping for start/end/types."""
     start_filter = datetime(2026, 4, 3, 12, 0, tzinfo=UTC)
     end_filter = datetime(2026, 4, 3, 20, 0, tzinfo=UTC)
     starts_at = datetime(2026, 4, 3, 18, 0, tzinfo=UTC)
@@ -110,6 +110,7 @@ def test_list_events_over_generated_client() -> None:
         assert request.url.path == "/events/"
         assert request.url.params.get("start") == start_filter.isoformat()
         assert request.url.params.get("end") == end_filter.isoformat()
+        assert request.url.params.get_list("types") == ["singleInstance", "occurrence"]
         return httpx.Response(
             status_code=HTTPStatus.OK,
             json=[
@@ -125,7 +126,11 @@ def test_list_events_over_generated_client() -> None:
         )
 
     adapter = _build_adapter(httpx.MockTransport(handler))
-    events = adapter.list_events(start=start_filter, end=end_filter, types=["singleInstance"])
+    events = adapter.list_events(
+        start=start_filter,
+        end=end_filter,
+        types=["singleInstance", "occurrence"],
+    )
 
     assert len(events) == 1
     assert events[0].id == "evt-list-1"

@@ -120,13 +120,14 @@ class ServiceClientAdapter(Client):
         *,
         start: datetime | None = None,
         end: datetime | None = None,
-        types: list[str] | None = None,  # noqa: ARG002 — required by Client ABC; generated client does not support type filtering
+        types: list[str] | None = None,
     ) -> list[Event]:
         """Return a list of calendar events, with optional filters."""
         result = list_events_events_get.sync(
             client=self._client,
             start=start,
             end=end,
+            types=types,
         )
         if result is None:
             return []

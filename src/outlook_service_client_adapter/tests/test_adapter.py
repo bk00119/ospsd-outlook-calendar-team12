@@ -332,7 +332,7 @@ class TestListEvents:
 
     @patch("outlook_service_client_adapter.adapter.list_events_events_get")
     def test_delegates_to_generated_client(self, mock_list: MagicMock) -> None:
-        """Call generated list function with start and end filters."""
+        """Call generated list function with start/end/types filters."""
         mock_list.sync.return_value = [
             EventResponse(
                 id="evt-1",
@@ -344,12 +344,17 @@ class TestListEvents:
             ),
         ]
 
-        self.adapter.list_events(start=self.starts_at, end=self.ends_at)
+        self.adapter.list_events(
+            start=self.starts_at,
+            end=self.ends_at,
+            types=["singleInstance"],
+        )
 
         mock_list.sync.assert_called_once_with(
             client=self.generated_client,
             start=self.starts_at,
             end=self.ends_at,
+            types=["singleInstance"],
         )
 
     @patch("outlook_service_client_adapter.adapter.list_events_events_get")

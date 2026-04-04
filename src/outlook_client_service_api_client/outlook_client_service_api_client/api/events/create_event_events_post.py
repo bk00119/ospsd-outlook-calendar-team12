@@ -31,9 +31,7 @@ def _get_kwargs(
 
 
 def _parse_response(
-    *,
-    client: AuthenticatedClient | Client,
-    response: httpx.Response,
+    *, client: AuthenticatedClient | Client, response: httpx.Response
 ) -> EventResponse | HTTPValidationError | None:
     if response.status_code == 201:
         response_201 = EventResponse.from_dict(response.json())
@@ -47,13 +45,12 @@ def _parse_response(
 
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
-    return None
+    else:
+        return None
 
 
 def _build_response(
-    *,
-    client: AuthenticatedClient | Client,
-    response: httpx.Response,
+    *, client: AuthenticatedClient | Client, response: httpx.Response
 ) -> Response[EventResponse | HTTPValidationError]:
     return Response(
         status_code=HTTPStatus(response.status_code),
@@ -81,8 +78,8 @@ def sync_detailed(
 
     Returns:
         Response[EventResponse | HTTPValidationError]
-
     """
+
     kwargs = _get_kwargs(
         body=body,
     )
@@ -112,8 +109,8 @@ def sync(
 
     Returns:
         EventResponse | HTTPValidationError
-
     """
+
     return sync_detailed(
         client=client,
         body=body,
@@ -138,8 +135,8 @@ async def asyncio_detailed(
 
     Returns:
         Response[EventResponse | HTTPValidationError]
-
     """
+
     kwargs = _get_kwargs(
         body=body,
     )
@@ -167,8 +164,8 @@ async def asyncio(
 
     Returns:
         EventResponse | HTTPValidationError
-
     """
+
     return (
         await asyncio_detailed(
             client=client,

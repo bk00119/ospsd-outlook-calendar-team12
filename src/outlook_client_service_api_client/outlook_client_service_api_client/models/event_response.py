@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 from collections.abc import Mapping
-from typing import Any, Self, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
@@ -24,7 +24,6 @@ class EventResponse:
         ends_at (datetime.datetime):
         location (None | str | Unset):
         description (None | str | Unset):
-
     """
 
     id: str
@@ -64,7 +63,7 @@ class EventResponse:
                 "title": title,
                 "starts_at": starts_at,
                 "ends_at": ends_at,
-            },
+            }
         )
         if location is not UNSET:
             field_dict["location"] = location
@@ -74,7 +73,7 @@ class EventResponse:
         return field_dict
 
     @classmethod
-    def from_dict(cls, src_dict: Mapping[str, Any]) -> Self:
+    def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
         id = d.pop("id")
 
@@ -89,7 +88,7 @@ class EventResponse:
                 return data
             if isinstance(data, Unset):
                 return data
-            return cast("None | str | Unset", data)
+            return cast(None | str | Unset, data)
 
         location = _parse_location(d.pop("location", UNSET))
 
@@ -98,7 +97,7 @@ class EventResponse:
                 return data
             if isinstance(data, Unset):
                 return data
-            return cast("None | str | Unset", data)
+            return cast(None | str | Unset, data)
 
         description = _parse_description(d.pop("description", UNSET))
 
