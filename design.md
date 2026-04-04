@@ -1,71 +1,190 @@
 # Design Document
 
-This document describes the architecture, design decisions, and component interactions for the Outlook Calendar Client project.
+This document explains the system design for the Outlook Calendar Client project across both homework phases. HW1 established the local interface and provider implementation. HW2 extends that design into a deployable service while preserving the same client-facing contract.
 
-## 1. Goals
+## 1. Architecture Overview
 
-Build a calendar client that:
+### HW1 Foundation
 
-1. Separates the **interface contract** from **provider-specific logic**, so the implementation can be swapped (e.g., from Outlook to Google Calendar) without changing consumer code.
-2. Follows strict code quality standards (Ruff, MyPy strict, 85% test coverage).
-3. Is structured as a uv workspace so each component is an independently packaged Python library.
+HW1 introduced the core separation between contract and implementation:
 
-## 2. Architecture Overview
+- `calendar_client_api`: defines the abstract `Client` and `Event` interfaces plus `EventPatch`. This package is provider-agnostic and contains no Microsoft Graph or HTTP-specific logic.
+- `outlook_client_impl`: provides `OutlookClient`, a concrete implementation of the `Client` contract backed by Microsoft Graph. It also contains authentication support and event parsing logic.
 
-The system is composed of two components connected through dependency injection:
-- `calendar_client_api`: Defines the abstract base class, `Client`, which is the contract of what the interface of a calendar client can do
-- `outlook_client_impl`: Implements the `OutlookClient` class - a concrete implementation of the Calendar Client that uses Microsoft Graph to perform contract actions on Outlook Calendar
+This separation keeps consumer code dependent on a stable calendar interface rather than on Outlook-specific SDK details.
 
-### Project Structure
+### HW2 Additions
+
+HW2 keeps the HW1 packages and adds three new layers:
+
+- `outlook_client_service`: a FastAPI service that exposes the calendar operations over HTTP. It also provides OAuth routes and a `/health` endpoint.
+- `outlook_client_service_client`: an auto-generated Python client created from the FastAPI OpenAPI schema. This package handles typed request and response models for the service.
+- `outlook_service_client_adapter`: an adapter that implements the original `calendar_client_api.Client` contract by delegating to the generated HTTP client.
+
+### Resulting System
+
+The full workspace has five packages:
+
+1. `calendar_client_api`
+2. `outlook_client_impl`
+3. `outlook_client_service`
+4. `outlook_client_service_client`
+5. `outlook_service_client_adapter`
+
+The design goal is location transparency. A caller can program against `calendar_client_api.Client` and use either:
+
+- the local implementation from HW1: `OutlookClient`
+- the remote service path from HW2: `ServiceClientAdapter`
+
+without changing the rest of the application logic.
+
+## 2. Request Flow
+
+### HW1 Local Flow
+
+In the original local design, consumer code calls a method on `calendar_client_api.Client`, and the concrete `OutlookClient` implementation directly talks to Microsoft Graph. The flow is:
+
+`consumer -> Client ABC -> OutlookClient -> Microsoft Graph -> OutlookClient -> Event`
+
+This path is simple and efficient, but it requires the Outlook implementation and Graph access to exist in the same runtime as the caller.
+
+### HW2 Remote Flow
+
+HW2 inserts a service boundary while keeping the same abstract interface. A `get_event` call flows through the system as follows:
+
+1. Consumer code calls `get_event(event_id)` on an object typed as `calendar_client_api.Client`.
+2. The concrete instance is `ServiceClientAdapter`, not `OutlookClient`.
+3. `ServiceClientAdapter.get_event(...)` calls the generated client function for `GET /events/{event_id}`.
+4. The generated client sends an HTTP request to `outlook_client_service`.
+5. The FastAPI route receives the request and resolves an authenticated `OutlookClient`.
+6. `OutlookClient.get_event(...)` retrieves the event from Microsoft Graph.
+7. The service converts the returned `Event` into an `EventResponse` schema.
+8. The generated client parses the JSON response into typed Python models.
+9. The adapter maps the generated model back into an object implementing the original `Event` contract.
+
+This path preserves the same caller-facing API while moving the implementation behind a network boundary.
+
+### Authentication in the Flow
+
+HW2 also changes authentication responsibilities. In HW1, authentication was primarily local to the implementation. In HW2, the service owns the OAuth 2.0 web flow:
+
+- `/auth/login` redirects the user to Microsoft
+- `/auth/callback` exchanges the authorization code for tokens
+- session state stores access and refresh token data
+- event routes depend on the current authenticated session
+
+This is necessary because the deployed service must authenticate web users rather than rely on a purely local developer flow.
+
+## 3. API Design With Error Handling
+
+### Stable Contract at the Boundary
+
+The main API exposed to application code remains the `calendar_client_api.Client` interface:
+
+- `get_event`
+- `list_events`
+- `create_event`
+- `update_event`
+- `delete_event`
+
+That contract does not expose HTTP transport details, FastAPI types, or Microsoft Graph SDK models.
+
+### Service Layer
+
+The FastAPI service exposes HTTP endpoints for the core calendar operations plus authentication and health checks. Its responsibilities are:
+
+- validate request data using FastAPI and schema models
+- translate HTTP requests into calls on `OutlookClient`
+- translate returned events into JSON response schemas
+- expose operational endpoints such as `/health`
+
+When the implementation raises an exception, the service wraps that failure as an HTTP error response instead of leaking internal exceptions directly to the client.
+
+### Generated Client Layer
+
+The auto-generated client is intentionally thin. It knows:
+
+- endpoint paths and HTTP methods
+- request and response schemas
+- documented status-code-specific response models
+
+For example, the generated `get_event` client parses:
+
+- `200` into `EventResponse`
+- `422` into `HTTPValidationError`
+
+and may return `None` for undocumented responses when unexpected statuses are not configured to raise.
+
+### Adapter Error Translation
+
+The adapter exists to prevent HTTP-specific behavior from leaking into application code. It translates generated-client outputs into normal Python behavior:
+
+- successful responses are mapped into objects implementing the `Event` contract
+- validation responses become `TypeError`
+- missing or unusable payloads become `RuntimeError`
+- transport exceptions from the generated client are allowed to propagate
+
+This keeps callers working with Python exceptions and domain objects rather than raw HTTP responses.
+
+## 4. Adapter Pattern Rationale With Code Comparison
+
+The adapter pattern is used to preserve the original HW1 interface while adding a remote deployment model in HW2.
+
+Without the adapter, client code would need to know whether it was calling:
+
+- a local Python implementation, or
+- a generated HTTP client with service-specific models
+
+That would couple application code to deployment details. The adapter removes that coupling.
+
+### Direct Local Usage
+
+```python
+from outlook_client_impl.outlook_impl import OutlookClient
+
+client = OutlookClient(interactive=False)
+event = client.get_event(event_id)
 ```
-OSPSD-OUTLOOK-CALENDAR-TEAM12/
-├── src/                          # Source packages (uv workspace members)
-│   ├── calendar_client_api/      # Abstract calendar client base class (ABC)
-│   └── outlook_client_impl/      # Outlook Calendar specific client implementation
-├── tests/                        # Integration and E2E tests
-│   ├── integration/              # Component integration tests
-│   └── e2e/                      # End-to-end application tests
-├── docs/                         # Documentation source files
-├── .circleci/                    # CircleCI configuration
-├── main.py                       # Main application entry point
-├── pyproject.toml                # Project configuration (dependencies, tools)
-└── uv.lock                       # Locked dependency versions
+
+### Remote Service Usage Through the Adapter
+
+```python
+from outlook_client_service_client.client import Client as GeneratedClient
+from outlook_service_client_adapter.adapter import ServiceClientAdapter
+
+generated = GeneratedClient(base_url="http://localhost:8000")
+client = ServiceClientAdapter(generated)
+event = client.get_event(event_id)
 ```
 
-## 3. Component Design
+The important design point is that both objects satisfy the same abstract interface. Consumer code can be written against `calendar_client_api.Client` and remain unchanged while the backing implementation changes from local to remote.
 
-### 3.1 `calendar_client_api` — Abstract Interface
+This is the central architectural improvement in HW2.
 
-**Location:** `src/calendar_client_api/`
+## 5. Testing Strategy
 
-This package defines the contract that all calendar clients must implement. It contains:
-
-- **`Client` (ABC):** Abstract base class with methods for CRUD operations on calendar events (`get_event`, `create_event`, `delete_event`, `update_event`, `list_events`).
-- **`Event` (ABC):** Abstract base class defining event properties (`id`, `title`, `starts_at`, `ends_at`, `location`, `description`).
-- **`EventPatch` (frozen dataclass):** A partial-update payload where all fields are optional. Only non-`None` fields are applied during an update.
-
-**Design decision:** This package has zero external dependencies. It relies only on the Python standard library. This separates the interface contract with any provider specific api.
-
-### 3.2 `outlook_client_impl` — Microsoft Graph Implementation
-
-**Location:** `src/outlook_client_impl/`
-
-This package provides the Outlook-specific implementation:
-
-- **`OutlookClient(Client)`:** Concrete implementation that translates abstract method calls into Microsoft Graph API requests via `GraphServiceClient`.
-- **`OutlookCalendarEvent(Event)`:** Concrete event that parses the JSON payload returned by Microsoft Graph into the abstract `Event` properties.
-- **`AuthManager`:** MSAL-based authentication manager.
-
-## 4. Testing Strategy
-
+Testing is split by layer so failures are easier to isolate and reason about.
 
 | Layer | Location | Purpose |
 |---|---|---|
-| Unit (API) | `src/calendar_client_api/tests/` | Interface contracts |
-| Unit (Impl) | `src/outlook_client_impl/tests/` | OutlookClient with mocked Graph SDK |
-| Integration | `tests/integration/` | Cross-component interactions |
-| E2E | `tests/e2e/` | Full application flow |
+| API contract | `src/calendar_client_api/tests/` | Verifies the abstract client and event contracts expected by consumers |
+| Implementation unit tests | `src/outlook_client_impl/tests/` | Verifies `OutlookClient` behavior with mocked Graph service interactions |
+| Service tests | `src/outlook_client_service/tests/` | Verifies route behavior, schema mapping, HTTP error translation, and OAuth route logic |
+| Adapter tests | `src/outlook_service_client_adapter/tests/` | Verifies delegation to the generated client, response mapping, and exception translation |
+| Integration and E2E | `tests/integration/`, `tests/e2e/` | Verifies larger multi-component flows where present |
 
-### Coverage
+### Why the Layers Are Tested Separately
 
-Minimum 85% line coverage is enforced in CI.
+- API tests protect the core contract from accidental interface drift.
+- Implementation tests confirm Microsoft Graph interactions without requiring the full service stack.
+- Service tests verify that HTTP routes correctly call the implementation and return the right schema and status behavior.
+- Adapter tests verify that the remote client path still behaves like the original local contract.
+
+This layered strategy is especially important in HW2 because the system now contains multiple translation boundaries:
+
+- Graph model to domain event
+- domain event to FastAPI response schema
+- HTTP JSON to generated client model
+- generated client model to `Event` contract through the adapter
+
+Testing each boundary independently makes it easier to identify where a regression occurred.

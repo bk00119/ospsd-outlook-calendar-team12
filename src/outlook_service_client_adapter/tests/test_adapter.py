@@ -38,6 +38,82 @@ class TestDeleteEvent:
             self.adapter.delete_event(self.event_id)
 
 
+class TestGetEvent:
+    """Tests for the get_event adapter method."""
+
+    def setup_method(self) -> None:
+        """Create a mock generated client and shared event data for each test."""
+        self.generated_client = MagicMock()
+        self.adapter = ServiceClientAdapter(self.generated_client)
+        self.event_id = "event-123"
+        self.starts_at = datetime(2026, 3, 25, 9, 0, tzinfo=UTC)
+        self.ends_at = datetime(2026, 3, 25, 10, 0, tzinfo=UTC)
+
+    @patch("outlook_service_client_adapter.adapter.get_event_events_event_id_get")
+    def test_delegates_to_generated_client(self, mock_get: MagicMock) -> None:
+        """Call generated get function with the expected event ID."""
+        mock_get.sync.return_value = EventResponse(
+            id=self.event_id,
+            title="Team sync",
+            starts_at=self.starts_at,
+            ends_at=self.ends_at,
+            location="Room A",
+            description="Discuss roadmap",
+        )
+
+        self.adapter.get_event(self.event_id)
+
+        mock_get.sync.assert_called_once_with(
+            event_id=self.event_id,
+            client=self.generated_client,
+        )
+
+    @patch("outlook_service_client_adapter.adapter.get_event_events_event_id_get")
+    def test_maps_event_response_to_event_contract(self, mock_get: MagicMock) -> None:
+        """Return an Event-compatible object mapped from generated EventResponse."""
+        mock_get.sync.return_value = EventResponse(
+            id=self.event_id,
+            title="Team sync",
+            starts_at=self.starts_at,
+            ends_at=self.ends_at,
+            location=None,
+            description=None,
+        )
+
+        event = self.adapter.get_event(self.event_id)
+
+        assert event.id == self.event_id
+        assert event.title == "Team sync"
+        assert event.starts_at == self.starts_at
+        assert event.ends_at == self.ends_at
+        assert event.location is None
+        assert event.description is None
+
+    @patch("outlook_service_client_adapter.adapter.get_event_events_event_id_get")
+    def test_raises_runtime_error_on_empty_response(self, mock_get: MagicMock) -> None:
+        """Raise RuntimeError when generated get returns no payload."""
+        mock_get.sync.return_value = None
+
+        with pytest.raises(RuntimeError, match="get_event returned no response payload"):
+            self.adapter.get_event(self.event_id)
+
+    @patch("outlook_service_client_adapter.adapter.get_event_events_event_id_get")
+    def test_raises_type_error_on_validation_response(self, mock_get: MagicMock) -> None:
+        """Raise TypeError when service returns validation error payload."""
+        mock_get.sync.return_value = HTTPValidationError()
+
+        with pytest.raises(TypeError, match="get_event validation failed"):
+            self.adapter.get_event(self.event_id)
+
+    @patch("outlook_service_client_adapter.adapter.get_event_events_event_id_get")
+    def test_propagates_generated_client_exception(self, mock_get: MagicMock) -> None:
+        """Propagate exceptions from generated get call."""
+        mock_get.sync.side_effect = Exception("network failure")
+
+        with pytest.raises(Exception, match="network failure"):
+            self.adapter.get_event(self.event_id)
+
+
 class TestCreateEvent:
     """Tests for the create_event adapter method."""
 
