@@ -8,6 +8,7 @@ This module provides an MSAL-backed `AuthManager` that supports:
 
 The cache files under `.auth/` contain sensitive tokens and must not be committed.
 """
+
 import json
 import time
 from pathlib import Path

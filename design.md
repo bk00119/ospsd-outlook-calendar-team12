@@ -165,13 +165,13 @@ This is the central architectural improvement in HW2.
 
 Testing is split by layer so failures are easier to isolate and reason about.
 
-| Layer | Location | Purpose |
-|---|---|---|
-| API contract | `src/calendar_client_api/tests/` | Verifies the abstract client and event contracts expected by consumers |
-| Implementation unit tests | `src/outlook_client_impl/tests/` | Verifies `OutlookClient` behavior with mocked Graph service interactions |
-| Service tests | `src/outlook_client_service/tests/` | Verifies route behavior, schema mapping, HTTP error translation, and OAuth route logic |
-| Adapter tests | `src/outlook_service_client_adapter/tests/` | Verifies delegation to the generated client, response mapping, and exception translation |
-| Integration and E2E | `tests/integration/`, `tests/e2e/` | Verifies larger multi-component flows where present |
+| Layer                     | Location                                    | Purpose                                                                                  |
+| ------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| API contract              | `src/calendar_client_api/tests/`            | Verifies the abstract client and event contracts expected by consumers                   |
+| Implementation unit tests | `src/outlook_client_impl/tests/`            | Verifies `OutlookClient` behavior with mocked Graph service interactions                 |
+| Service tests             | `src/outlook_client_service/tests/`         | Verifies route behavior, schema mapping, HTTP error translation, and OAuth route logic   |
+| Adapter tests             | `src/outlook_service_client_adapter/tests/` | Verifies delegation to the generated client, response mapping, and exception translation |
+| Integration and E2E       | `tests/integration/`, `tests/e2e/`          | Verifies larger multi-component flows where present                                      |
 
 ### Why the Layers Are Tested Separately
 
