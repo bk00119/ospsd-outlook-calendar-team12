@@ -5,9 +5,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from calendar_client_api.event import EventPatch
+from calendar_client_api.exceptions import CalendarAuthError, CalendarNotFoundError, CalendarServiceError, CalendarValidationError
 from outlook_client_service_api_client.models.event_response import EventResponse
 from outlook_client_service_api_client.models.http_validation_error import HTTPValidationError
 from outlook_service_client_adapter.adapter import ServiceClientAdapter
+
+from outlook_client_service_api_client import errors as generated_errors
 
 
 class TestDeleteEvent:
@@ -31,10 +34,18 @@ class TestDeleteEvent:
 
     @patch("outlook_service_client_adapter.adapter.delete_event_events_event_id_delete")
     def test_propagates_exception(self, mock_delete: MagicMock) -> None:
-        """Propagate exceptions from the generated client."""
-        mock_delete.sync.side_effect = Exception("connection failed")
+        """Map transport exceptions from generated client to CalendarServiceError."""
+        mock_delete.sync.side_effect = RuntimeError("connection failed")
 
-        with pytest.raises(Exception, match="connection failed"):
+        with pytest.raises(CalendarServiceError, match="delete_event failed"):
+            self.adapter.delete_event(self.event_id)
+
+    @patch("outlook_service_client_adapter.adapter.delete_event_events_event_id_delete")
+    def test_maps_unexpected_status_to_not_found(self, mock_delete: MagicMock) -> None:
+        """Map generated 404 status to CalendarNotFoundError."""
+        mock_delete.sync.side_effect = generated_errors.UnexpectedStatus(404, b"missing")
+
+        with pytest.raises(CalendarNotFoundError, match="resource not found"):
             self.adapter.delete_event(self.event_id)
 
 
@@ -91,26 +102,34 @@ class TestGetEvent:
 
     @patch("outlook_service_client_adapter.adapter.get_event_events_event_id_get")
     def test_raises_runtime_error_on_empty_response(self, mock_get: MagicMock) -> None:
-        """Raise RuntimeError when generated get returns no payload."""
+        """Raise CalendarServiceError when generated get returns no payload."""
         mock_get.sync.return_value = None
 
-        with pytest.raises(RuntimeError, match="get_event returned no response payload"):
+        with pytest.raises(CalendarServiceError, match="get_event returned no response payload"):
             self.adapter.get_event(self.event_id)
 
     @patch("outlook_service_client_adapter.adapter.get_event_events_event_id_get")
     def test_raises_type_error_on_validation_response(self, mock_get: MagicMock) -> None:
-        """Raise TypeError when service returns validation error payload."""
+        """Raise CalendarValidationError when service returns validation error payload."""
         mock_get.sync.return_value = HTTPValidationError()
 
-        with pytest.raises(TypeError, match="get_event validation failed"):
+        with pytest.raises(CalendarValidationError, match="get_event validation failed"):
             self.adapter.get_event(self.event_id)
 
     @patch("outlook_service_client_adapter.adapter.get_event_events_event_id_get")
     def test_propagates_generated_client_exception(self, mock_get: MagicMock) -> None:
-        """Propagate exceptions from generated get call."""
-        mock_get.sync.side_effect = Exception("network failure")
+        """Map transport exceptions from generated get call to CalendarServiceError."""
+        mock_get.sync.side_effect = RuntimeError("network failure")
 
-        with pytest.raises(Exception, match="network failure"):
+        with pytest.raises(CalendarServiceError, match="get_event failed"):
+            self.adapter.get_event(self.event_id)
+
+    @patch("outlook_service_client_adapter.adapter.get_event_events_event_id_get")
+    def test_maps_unexpected_status_to_auth_error(self, mock_get: MagicMock) -> None:
+        """Map generated 401 status to CalendarAuthError."""
+        mock_get.sync.side_effect = generated_errors.UnexpectedStatus(401, b"auth")
+
+        with pytest.raises(CalendarAuthError, match="unauthorized"):
             self.adapter.get_event(self.event_id)
 
 
@@ -181,10 +200,10 @@ class TestCreateEvent:
 
     @patch("outlook_service_client_adapter.adapter.create_event_events_post")
     def test_raises_runtime_error_on_empty_response(self, mock_create: MagicMock) -> None:
-        """Raise RuntimeError when generated create returns no payload."""
+        """Raise CalendarServiceError when generated create returns no payload."""
         mock_create.sync.return_value = None
 
-        with pytest.raises(RuntimeError, match="create_event returned no response payload"):
+        with pytest.raises(CalendarServiceError, match="create_event returned no response payload"):
             self.adapter.create_event(
                 title="Empty",
                 starts_at=self.starts_at,
@@ -193,10 +212,10 @@ class TestCreateEvent:
 
     @patch("outlook_service_client_adapter.adapter.create_event_events_post")
     def test_raises_type_error_on_validation_response(self, mock_create: MagicMock) -> None:
-        """Raise TypeError when service returns validation error payload."""
+        """Raise CalendarValidationError when service returns validation error payload."""
         mock_create.sync.return_value = HTTPValidationError()
 
-        with pytest.raises(TypeError, match="create_event validation failed"):
+        with pytest.raises(CalendarValidationError, match="create_event validation failed"):
             self.adapter.create_event(
                 title="Bad",
                 starts_at=self.starts_at,
@@ -205,10 +224,10 @@ class TestCreateEvent:
 
     @patch("outlook_service_client_adapter.adapter.create_event_events_post")
     def test_propagates_generated_client_exception(self, mock_create: MagicMock) -> None:
-        """Propagate exceptions from generated create call."""
-        mock_create.sync.side_effect = Exception("network failure")
+        """Map transport exceptions from generated create call to CalendarServiceError."""
+        mock_create.sync.side_effect = RuntimeError("network failure")
 
-        with pytest.raises(Exception, match="network failure"):
+        with pytest.raises(CalendarServiceError, match="create_event failed"):
             self.adapter.create_event(
                 title="Err",
                 starts_at=self.starts_at,
@@ -291,10 +310,10 @@ class TestUpdateEvent:
         self,
         mock_update: MagicMock,
     ) -> None:
-        """Raise RuntimeError when generated update returns no payload."""
+        """Raise CalendarServiceError when generated update returns no payload."""
         mock_update.sync.return_value = None
 
-        with pytest.raises(RuntimeError, match="update_event returned no response payload"):
+        with pytest.raises(CalendarServiceError, match="update_event returned no response payload"):
             self.adapter.update_event(self.event_id, self.payload)
 
     @patch("outlook_service_client_adapter.adapter.update_event_events_event_id_patch")
@@ -302,10 +321,10 @@ class TestUpdateEvent:
         self,
         mock_update: MagicMock,
     ) -> None:
-        """Raise TypeError when service returns validation error payload."""
+        """Raise CalendarValidationError when service returns validation error payload."""
         mock_update.sync.return_value = HTTPValidationError()
 
-        with pytest.raises(TypeError, match="update_event validation failed"):
+        with pytest.raises(CalendarValidationError, match="update_event validation failed"):
             self.adapter.update_event(self.event_id, self.payload)
 
     @patch("outlook_service_client_adapter.adapter.update_event_events_event_id_patch")
@@ -313,10 +332,10 @@ class TestUpdateEvent:
         self,
         mock_update: MagicMock,
     ) -> None:
-        """Propagate exceptions from generated update call."""
-        mock_update.sync.side_effect = Exception("network failure")
+        """Map transport exceptions from generated update call to CalendarServiceError."""
+        mock_update.sync.side_effect = RuntimeError("network failure")
 
-        with pytest.raises(Exception, match="network failure"):
+        with pytest.raises(CalendarServiceError, match="update_event failed"):
             self.adapter.update_event(self.event_id, self.payload)
 
 
@@ -380,26 +399,25 @@ class TestListEvents:
         assert events[0].ends_at == self.ends_at
 
     @patch("outlook_service_client_adapter.adapter.list_events_events_get")
-    def test_returns_empty_list_on_none_response(self, mock_list: MagicMock) -> None:
-        """Return an empty list when generated client returns None."""
+    def test_raises_service_error_on_none_response(self, mock_list: MagicMock) -> None:
+        """Raise CalendarServiceError when generated client returns no payload."""
         mock_list.sync.return_value = None
 
-        result = self.adapter.list_events()
-
-        assert result == []
+        with pytest.raises(CalendarServiceError, match="list_events returned no response payload"):
+            self.adapter.list_events()
 
     @patch("outlook_service_client_adapter.adapter.list_events_events_get")
     def test_raises_type_error_on_validation_response(self, mock_list: MagicMock) -> None:
-        """Raise TypeError when service returns validation error payload."""
+        """Raise CalendarValidationError when service returns validation error payload."""
         mock_list.sync.return_value = HTTPValidationError()
 
-        with pytest.raises(TypeError, match="list_events validation failed"):
+        with pytest.raises(CalendarValidationError, match="list_events validation failed"):
             self.adapter.list_events()
 
     @patch("outlook_service_client_adapter.adapter.list_events_events_get")
     def test_propagates_generated_client_exception(self, mock_list: MagicMock) -> None:
-        """Propagate exceptions from generated list call."""
-        mock_list.sync.side_effect = Exception("network failure")
+        """Map transport exceptions from generated list call to CalendarServiceError."""
+        mock_list.sync.side_effect = RuntimeError("network failure")
 
-        with pytest.raises(Exception, match="network failure"):
+        with pytest.raises(CalendarServiceError, match="list_events failed"):
             self.adapter.list_events()

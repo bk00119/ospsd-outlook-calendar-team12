@@ -2,9 +2,16 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from http import HTTPStatus
 
 from calendar_client_api.client import Client
 from calendar_client_api.event import Event, EventPatch
+from calendar_client_api.exceptions import (
+    CalendarAuthError,
+    CalendarNotFoundError,
+    CalendarServiceError,
+    CalendarValidationError,
+)
 from outlook_client_service_api_client.api.events import (
     create_event_events_post,
     delete_event_events_event_id_delete,
@@ -20,6 +27,7 @@ from outlook_client_service_api_client.models.http_validation_error import HTTPV
 from outlook_client_service_api_client.types import Unset
 
 import calendar_client_api
+from outlook_client_service_api_client import errors as generated_errors
 
 
 @dataclass(frozen=True)
@@ -94,25 +102,51 @@ class ServiceClientAdapter(Client):
             _description=cls._unset_to_none(response.description),
         )
 
+    @staticmethod
+    def _raise_mapped_http_error(
+        operation: str,
+        exc: generated_errors.UnexpectedStatus | RuntimeError,
+    ) -> None:
+        """Translate generated HTTP/client exceptions to domain exceptions."""
+        if isinstance(exc, generated_errors.UnexpectedStatus):
+            if exc.status_code == HTTPStatus.NOT_FOUND:
+                msg = f"{operation} failed: resource not found."
+                raise CalendarNotFoundError(msg) from exc
+            if exc.status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
+                msg = f"{operation} failed: unauthorized request."
+                raise CalendarAuthError(msg) from exc
+            msg = f"{operation} failed with HTTP {exc.status_code}."
+            raise CalendarServiceError(msg) from exc
+
+        msg = f"{operation} failed due to transport/service error."
+        raise CalendarServiceError(msg) from exc
+
     def delete_event(self, event_id: str) -> None:
         """Delete an event by its ID."""
-        delete_event_events_event_id_delete.sync(
-            event_id=event_id,
-            client=self._client,
-        )
+        try:
+            delete_event_events_event_id_delete.sync(
+                event_id=event_id,
+                client=self._client,
+            )
+        except (generated_errors.UnexpectedStatus, RuntimeError) as exc:
+            self._raise_mapped_http_error("delete_event", exc)
 
     def get_event(self, event_id: str) -> Event:
         """Return an event by its ID."""
-        result = get_event_events_event_id_get.sync(
-            event_id=event_id,
-            client=self._client,
-        )
+        try:
+            result = get_event_events_event_id_get.sync(
+                event_id=event_id,
+                client=self._client,
+            )
+        except (generated_errors.UnexpectedStatus, RuntimeError) as exc:
+            self._raise_mapped_http_error("get_event", exc)
+
         if result is None:
             msg = "get_event returned no response payload."
-            raise RuntimeError(msg)
+            raise CalendarServiceError(msg)
         if isinstance(result, HTTPValidationError):
             msg = f"get_event validation failed: {result.to_dict()}"
-            raise TypeError(msg)
+            raise CalendarValidationError(msg)
         return self._event_from_response(result)
 
     def list_events(
@@ -123,17 +157,22 @@ class ServiceClientAdapter(Client):
         types: list[str] | None = None,
     ) -> list[Event]:
         """Return a list of calendar events, with optional filters."""
-        result = list_events_events_get.sync(
-            client=self._client,
-            start=start,
-            end=end,
-            types=types,
-        )
+        try:
+            result = list_events_events_get.sync(
+                client=self._client,
+                start=start,
+                end=end,
+                types=types,
+            )
+        except (generated_errors.UnexpectedStatus, RuntimeError) as exc:
+            self._raise_mapped_http_error("list_events", exc)
+
         if result is None:
-            return []
+            msg = "list_events returned no response payload."
+            raise CalendarServiceError(msg)
         if isinstance(result, HTTPValidationError):
             msg = f"list_events validation failed: {result.to_dict()}"
-            raise TypeError(msg)
+            raise CalendarValidationError(msg)
         return [self._event_from_response(ev) for ev in result]
 
     def create_event(
@@ -152,16 +191,20 @@ class ServiceClientAdapter(Client):
             location=location,
             description=description,
         )
-        result = create_event_events_post.sync(
-            client=self._client,
-            body=body,
-        )
+        try:
+            result = create_event_events_post.sync(
+                client=self._client,
+                body=body,
+            )
+        except (generated_errors.UnexpectedStatus, RuntimeError) as exc:
+            self._raise_mapped_http_error("create_event", exc)
+
         if result is None:
             msg = "create_event returned no response payload."
-            raise RuntimeError(msg)
+            raise CalendarServiceError(msg)
         if isinstance(result, HTTPValidationError):
             msg = f"create_event validation failed: {result.to_dict()}"
-            raise TypeError(msg)
+            raise CalendarValidationError(msg)
         return self._event_from_response(result)
 
     def update_event(self, event_id: str, payload: EventPatch) -> Event:
@@ -173,20 +216,24 @@ class ServiceClientAdapter(Client):
             location=payload.location,
             description=payload.description,
         )
-        result = update_event_events_event_id_patch.sync(
-            client=self._client,
-            event_id=event_id,
-            body=body,
-        )
+        try:
+            result = update_event_events_event_id_patch.sync(
+                client=self._client,
+                event_id=event_id,
+                body=body,
+            )
+        except (generated_errors.UnexpectedStatus, RuntimeError) as exc:
+            self._raise_mapped_http_error("update_event", exc)
+
         if result is None:
             msg = "update_event returned no response payload."
-            raise RuntimeError(msg)
+            raise CalendarServiceError(msg)
         if isinstance(result, HTTPValidationError):
             msg = f"update_event validation failed: {result.to_dict()}"
-            raise TypeError(msg)
+            raise CalendarValidationError(msg)
         return self._event_from_response(result)
 
-def get_client_impl(*, interactive: bool = False) -> Client:  # noqa: ARG001 — required by get_client signature; adapter has no interactive auth mode
+def get_client_impl(*, interactive: bool = False) -> Client:  # noqa: ARG001
     """Return a configured ServiceClientAdapter instance."""
     generated = GeneratedClient(base_url="http://localhost:8000")
     return ServiceClientAdapter(generated)
