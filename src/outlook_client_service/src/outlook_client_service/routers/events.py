@@ -35,10 +35,11 @@ def list_events(
     client: Annotated[Client, Depends(get_calendar_client)],
     start: datetime | None = None,
     end: datetime | None = None,
+    types: list[str] | None = None,
 ) -> list[EventResponse]:
     """List calendar events, optionally filtered by start and end time."""
     try:
-        events = client.list_events(start=start, end=end)
+        events = client.list_events(start=start, end=end, types=types)
     except Exception as e:
         raise HTTPException(status_code=HTTPStatus.BAD_GATEWAY, detail=f"Failed to list events: {e}") from e
     return [_to_event_response(ev) for ev in events]
