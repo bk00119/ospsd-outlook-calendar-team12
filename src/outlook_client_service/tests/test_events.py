@@ -267,7 +267,7 @@ class TestListEvents:
 
         list_events(self.client, start=self.starts_at, end=self.ends_at)
 
-        self.client.list_events.assert_called_once_with(start=self.starts_at, end=self.ends_at)
+        self.client.list_events.assert_called_once_with(start=self.starts_at, end=self.ends_at, types=None)
 
     def test_return_mapped_event_responses(self) -> None:
         """Return a list of mapped EventResponse objects after a successful list."""
