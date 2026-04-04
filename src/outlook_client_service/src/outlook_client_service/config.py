@@ -28,7 +28,7 @@ class Settings:
 
     session_secret_key: str = os.getenv("SESSION_SECRET_KEY", "dev-secret-key")
 
-    cors_origins_raw: str = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+    cors_origins_raw: str = os.getenv("CORS_ORIGINS", "http://localhost:8000")
 
     def cors_origins(self) -> list[str]:
         """Return parsed CORS origins as a list."""
