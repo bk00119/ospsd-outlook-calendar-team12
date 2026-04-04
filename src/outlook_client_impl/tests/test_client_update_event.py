@@ -6,7 +6,9 @@ from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import MagicMock
 
+import outlook_client_impl.outlook_impl as outlook_impl_module
 import pytest
+from calendar_client_api.exceptions import CalendarValidationError
 from outlook_client_impl.outlook_impl import OutlookClient
 
 from calendar_client_api import event
@@ -59,7 +61,7 @@ class TestUpdateEventValidation:
         self, client: OutlookClient,
     ) -> None:
         """Ensure blank or empty payload inputs raise ValueError."""
-        with pytest.raises(ValueError, match="payload must update at least one field"):
+        with pytest.raises(CalendarValidationError, match="payload must update at least one field"):
             client.update_event("abc", event.EventPatch())
 
 
@@ -153,7 +155,7 @@ class TestUpdateEventReturnBehavior:
             assert '"id"' in raw_data
             return sentinel
 
-        monkeypatch.setattr(event, "get_event", fake_get_event)
+        monkeypatch.setattr(outlook_impl_module, "get_event_impl", fake_get_event)
 
         got = client.update_event("abc", event.EventPatch(title="New"))
 
@@ -196,7 +198,7 @@ class TestUpdateEventAsyncHandling:
             assert '"id"' in raw_data
             return sentinel
 
-        monkeypatch.setattr(event, "get_event", fake_get_event)
+        monkeypatch.setattr(outlook_impl_module, "get_event_impl", fake_get_event)
 
         got = client.update_event("abc", event.EventPatch(title="New"))
 

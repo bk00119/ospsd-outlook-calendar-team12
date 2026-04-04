@@ -14,5 +14,3 @@ def register() -> None:
     _register_event()
 
 
-# Dependency Injection happens at import time
-register()

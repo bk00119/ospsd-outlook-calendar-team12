@@ -125,8 +125,19 @@ OSPSD-OUTLOOK-CALENDAR-TEAM12/
     # Run integration tests
     uv run pytest -m integration
 
-    # Run end to end tests
-    uv run pytest -m e2e
+    # Run end to end tests on local library
+    E2E=1 \
+    E2E_CLIENT_FACTORY=local \
+    uv run pytest -m e2e --no-cov
+  
+    # Run end to end tests on remote service
+    # You can change the base url to the remote server address.
+    # Before running this, please login with your browser first, then copy and paste the session value to the variable below.
+    E2E=1 \
+    E2E_CLIENT_FACTORY=service \
+    OUTLOOK_CLIENT_SERVICE_BASE_URL=http://localhost:8000 \
+    OUTLOOK_CLIENT_SERVICE_SESSION='...' \
+    uv run pytest -m e2e --no-cov
 
     # With coverage report
     uv run pytest --cov=src --cov-report=term-missing
