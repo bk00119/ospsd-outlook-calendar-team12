@@ -8,6 +8,7 @@ from calendar_client_api.event import Event, EventPatch
 from outlook_client_service_client.api.events import (
     create_event_events_post,
     delete_event_events_event_id_delete,
+    get_event_events_event_id_get,
     list_events_events_get,
     update_event_events_event_id_patch,
 )
@@ -100,7 +101,17 @@ class ServiceClientAdapter(Client):
 
     def get_event(self, event_id: str) -> Event:
         """Return an event by its ID."""
-        raise NotImplementedError
+        result = get_event_events_event_id_get.sync(
+            event_id=event_id,
+            client=self._client,
+        )
+        if result is None:
+            msg = "get_event returned no response payload."
+            raise RuntimeError(msg)
+        if isinstance(result, HTTPValidationError):
+            msg = f"get_event validation failed: {result.to_dict()}"
+            raise TypeError(msg)
+        return self._event_from_response(result)
 
     def list_events(
         self,
@@ -171,4 +182,3 @@ class ServiceClientAdapter(Client):
             msg = f"update_event validation failed: {result.to_dict()}"
             raise TypeError(msg)
         return self._event_from_response(result)
-
