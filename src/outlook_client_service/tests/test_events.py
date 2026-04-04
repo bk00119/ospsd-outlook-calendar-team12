@@ -6,6 +6,7 @@ from unittest.mock import create_autospec
 
 import pytest
 from calendar_client_api.event import EventPatch
+from calendar_client_api.exceptions import CalendarAuthError, CalendarNotFoundError, CalendarValidationError
 from fastapi import HTTPException
 from outlook_client_impl.event_impl import OutlookCalendarEvent
 from outlook_client_impl.outlook_impl import OutlookClient
@@ -81,6 +82,16 @@ class TestCreateEvent:
 
         assert exc_info.value.status_code == HTTPStatus.BAD_GATEWAY
         assert exc_info.value.detail == "Failed to create event: boom"
+
+    def test_map_domain_validation_error_as_http_422(self) -> None:
+        """Translate CalendarValidationError to HTTP 422."""
+        self.client.create_event.side_effect = CalendarValidationError("invalid event payload")
+
+        with pytest.raises(HTTPException) as exc_info:
+            create_event(self.request, self.client)
+
+        assert exc_info.value.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+        assert exc_info.value.detail == "invalid event payload"
 
 
 class TestUpdateEvent:
@@ -226,6 +237,16 @@ class TestGetEvent:
         assert exc_info.value.status_code == HTTPStatus.BAD_GATEWAY
         assert exc_info.value.detail == "Failed to get event: Error"
 
+    def test_map_domain_not_found_error_as_http_404(self) -> None:
+        """Translate CalendarNotFoundError to HTTP 404."""
+        self.client.get_event.side_effect = CalendarNotFoundError("event not found")
+
+        with pytest.raises(HTTPException) as exc_info:
+            get_event(self.event_id, self.client)
+
+        assert exc_info.value.status_code == HTTPStatus.NOT_FOUND
+        assert exc_info.value.detail == "event not found"
+
     def test_return_mapped_event_response(self) -> None:
         """Return a mapped EventResponse after a successful get."""
         self.client.get_event.return_value = self._build_event()
@@ -302,3 +323,13 @@ class TestListEvents:
 
         assert exc_info.value.status_code == HTTPStatus.BAD_GATEWAY
         assert exc_info.value.detail == "Failed to list events: boom"
+
+    def test_map_domain_auth_error_as_http_401(self) -> None:
+        """Translate CalendarAuthError to HTTP 401."""
+        self.client.list_events.side_effect = CalendarAuthError("auth required")
+
+        with pytest.raises(HTTPException) as exc_info:
+            list_events(self.client, start=None, end=None)
+
+        assert exc_info.value.status_code == HTTPStatus.UNAUTHORIZED
+        assert exc_info.value.detail == "auth required"
