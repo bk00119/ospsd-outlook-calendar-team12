@@ -25,6 +25,8 @@
 
 - [ ] `calendar_client_api`
 - [ ] `outlook_client_impl`
+- [ ] `outlook_client_service`
+- [ ] `outlook_service_client_adapter`
 - [ ] Documentation
 - [ ] Tests
 - [ ] Tooling / CI
