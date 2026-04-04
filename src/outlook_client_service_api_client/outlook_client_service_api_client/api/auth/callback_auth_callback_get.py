@@ -54,7 +54,9 @@ def _get_kwargs(
 
 
 def _parse_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response,
+    *,
+    client: AuthenticatedClient | Client,
+    response: httpx.Response,
 ) -> CallbackAuthCallbackGetResponseCallbackAuthCallbackGet | HTTPValidationError | None:
     if response.status_code == 200:
         response_200 = CallbackAuthCallbackGetResponseCallbackAuthCallbackGet.from_dict(response.json())
@@ -72,7 +74,9 @@ def _parse_response(
 
 
 def _build_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response,
+    *,
+    client: AuthenticatedClient | Client,
+    response: httpx.Response,
 ) -> Response[CallbackAuthCallbackGetResponseCallbackAuthCallbackGet | HTTPValidationError]:
     return Response(
         status_code=HTTPStatus(response.status_code),

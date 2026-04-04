@@ -5,43 +5,31 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
-from ...models.event_create_request import EventCreateRequest
-from ...models.event_response import EventResponse
-from ...models.http_validation_error import HTTPValidationError
+from ...models.logout_auth_logout_post_response_logout_auth_logout_post import (
+    LogoutAuthLogoutPostResponseLogoutAuthLogoutPost,
+)
 from ...types import Response
 
 
-def _get_kwargs(
-    *,
-    body: EventCreateRequest,
-) -> dict[str, Any]:
-    headers: dict[str, Any] = {}
+def _get_kwargs() -> dict[str, Any]:
 
     _kwargs: dict[str, Any] = {
         "method": "post",
-        "url": "/events/",
+        "url": "/auth/logout",
     }
 
-    _kwargs["json"] = body.to_dict()
-
-    headers["Content-Type"] = "application/json"
-
-    _kwargs["headers"] = headers
     return _kwargs
 
 
 def _parse_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response,
-) -> EventResponse | HTTPValidationError | None:
-    if response.status_code == 201:
-        response_201 = EventResponse.from_dict(response.json())
+    *,
+    client: AuthenticatedClient | Client,
+    response: httpx.Response,
+) -> LogoutAuthLogoutPostResponseLogoutAuthLogoutPost | None:
+    if response.status_code == 200:
+        response_200 = LogoutAuthLogoutPostResponseLogoutAuthLogoutPost.from_dict(response.json())
 
-        return response_201
-
-    if response.status_code == 422:
-        response_422 = HTTPValidationError.from_dict(response.json())
-
-        return response_422
+        return response_200
 
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
@@ -49,8 +37,10 @@ def _parse_response(
 
 
 def _build_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response,
-) -> Response[EventResponse | HTTPValidationError]:
+    *,
+    client: AuthenticatedClient | Client,
+    response: httpx.Response,
+) -> Response[LogoutAuthLogoutPostResponseLogoutAuthLogoutPost]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -62,26 +52,20 @@ def _build_response(
 def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
-    body: EventCreateRequest,
-) -> Response[EventResponse | HTTPValidationError]:
-    """Create Event
+) -> Response[LogoutAuthLogoutPostResponseLogoutAuthLogoutPost]:
+    """Logout
 
-     Create a new event.
-
-    Args:
-        body (EventCreateRequest): Request model for creating an event.
+     Clear the current session.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[EventResponse | HTTPValidationError]
+        Response[LogoutAuthLogoutPostResponseLogoutAuthLogoutPost]
 
     """
-    kwargs = _get_kwargs(
-        body=body,
-    )
+    kwargs = _get_kwargs()
 
     response = client.get_httpx_client().request(
         **kwargs,
@@ -93,52 +77,41 @@ def sync_detailed(
 def sync(
     *,
     client: AuthenticatedClient | Client,
-    body: EventCreateRequest,
-) -> EventResponse | HTTPValidationError | None:
-    """Create Event
+) -> LogoutAuthLogoutPostResponseLogoutAuthLogoutPost | None:
+    """Logout
 
-     Create a new event.
-
-    Args:
-        body (EventCreateRequest): Request model for creating an event.
+     Clear the current session.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        EventResponse | HTTPValidationError
+        LogoutAuthLogoutPostResponseLogoutAuthLogoutPost
 
     """
     return sync_detailed(
         client=client,
-        body=body,
     ).parsed
 
 
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
-    body: EventCreateRequest,
-) -> Response[EventResponse | HTTPValidationError]:
-    """Create Event
+) -> Response[LogoutAuthLogoutPostResponseLogoutAuthLogoutPost]:
+    """Logout
 
-     Create a new event.
-
-    Args:
-        body (EventCreateRequest): Request model for creating an event.
+     Clear the current session.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[EventResponse | HTTPValidationError]
+        Response[LogoutAuthLogoutPostResponseLogoutAuthLogoutPost]
 
     """
-    kwargs = _get_kwargs(
-        body=body,
-    )
+    kwargs = _get_kwargs()
 
     response = await client.get_async_httpx_client().request(**kwargs)
 
@@ -148,26 +121,21 @@ async def asyncio_detailed(
 async def asyncio(
     *,
     client: AuthenticatedClient | Client,
-    body: EventCreateRequest,
-) -> EventResponse | HTTPValidationError | None:
-    """Create Event
+) -> LogoutAuthLogoutPostResponseLogoutAuthLogoutPost | None:
+    """Logout
 
-     Create a new event.
-
-    Args:
-        body (EventCreateRequest): Request model for creating an event.
+     Clear the current session.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        EventResponse | HTTPValidationError
+        LogoutAuthLogoutPostResponseLogoutAuthLogoutPost
 
     """
     return (
         await asyncio_detailed(
             client=client,
-            body=body,
         )
     ).parsed

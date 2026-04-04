@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from calendar_client_api.event import EventPatch
-from outlook_client_service_client.models.event_response import EventResponse
-from outlook_client_service_client.models.http_validation_error import HTTPValidationError
+from outlook_client_service_api_client.models.event_response import EventResponse
+from outlook_client_service_api_client.models.http_validation_error import HTTPValidationError
 from outlook_service_client_adapter.adapter import ServiceClientAdapter
 
 

@@ -7,35 +7,28 @@ import httpx
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.event_response import EventResponse
-from ...models.event_update_request import EventUpdateRequest
 from ...models.http_validation_error import HTTPValidationError
 from ...types import Response
 
 
 def _get_kwargs(
     event_id: str,
-    *,
-    body: EventUpdateRequest,
 ) -> dict[str, Any]:
-    headers: dict[str, Any] = {}
 
     _kwargs: dict[str, Any] = {
-        "method": "patch",
+        "method": "get",
         "url": "/events/{event_id}".format(
             event_id=quote(str(event_id), safe=""),
         ),
     }
 
-    _kwargs["json"] = body.to_dict()
-
-    headers["Content-Type"] = "application/json"
-
-    _kwargs["headers"] = headers
     return _kwargs
 
 
 def _parse_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response,
+    *,
+    client: AuthenticatedClient | Client,
+    response: httpx.Response,
 ) -> EventResponse | HTTPValidationError | None:
     if response.status_code == 200:
         response_200 = EventResponse.from_dict(response.json())
@@ -53,7 +46,9 @@ def _parse_response(
 
 
 def _build_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response,
+    *,
+    client: AuthenticatedClient | Client,
+    response: httpx.Response,
 ) -> Response[EventResponse | HTTPValidationError]:
     return Response(
         status_code=HTTPStatus(response.status_code),
@@ -67,15 +62,13 @@ def sync_detailed(
     event_id: str,
     *,
     client: AuthenticatedClient | Client,
-    body: EventUpdateRequest,
 ) -> Response[EventResponse | HTTPValidationError]:
-    """Update Event
+    """Get Event
 
-     Update an existing event record partially.
+     Get an event by ID.
 
     Args:
         event_id (str):
-        body (EventUpdateRequest): Request model for updating an event (partial update).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -87,7 +80,6 @@ def sync_detailed(
     """
     kwargs = _get_kwargs(
         event_id=event_id,
-        body=body,
     )
 
     response = client.get_httpx_client().request(
@@ -101,15 +93,13 @@ def sync(
     event_id: str,
     *,
     client: AuthenticatedClient | Client,
-    body: EventUpdateRequest,
 ) -> EventResponse | HTTPValidationError | None:
-    """Update Event
+    """Get Event
 
-     Update an existing event record partially.
+     Get an event by ID.
 
     Args:
         event_id (str):
-        body (EventUpdateRequest): Request model for updating an event (partial update).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -122,7 +112,6 @@ def sync(
     return sync_detailed(
         event_id=event_id,
         client=client,
-        body=body,
     ).parsed
 
 
@@ -130,15 +119,13 @@ async def asyncio_detailed(
     event_id: str,
     *,
     client: AuthenticatedClient | Client,
-    body: EventUpdateRequest,
 ) -> Response[EventResponse | HTTPValidationError]:
-    """Update Event
+    """Get Event
 
-     Update an existing event record partially.
+     Get an event by ID.
 
     Args:
         event_id (str):
-        body (EventUpdateRequest): Request model for updating an event (partial update).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -150,7 +137,6 @@ async def asyncio_detailed(
     """
     kwargs = _get_kwargs(
         event_id=event_id,
-        body=body,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -162,15 +148,13 @@ async def asyncio(
     event_id: str,
     *,
     client: AuthenticatedClient | Client,
-    body: EventUpdateRequest,
 ) -> EventResponse | HTTPValidationError | None:
-    """Update Event
+    """Get Event
 
-     Update an existing event record partially.
+     Get an event by ID.
 
     Args:
         event_id (str):
-        body (EventUpdateRequest): Request model for updating an event (partial update).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -184,6 +168,5 @@ async def asyncio(
         await asyncio_detailed(
             event_id=event_id,
             client=client,
-            body=body,
         )
     ).parsed
