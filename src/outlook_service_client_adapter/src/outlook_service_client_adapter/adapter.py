@@ -8,6 +8,7 @@ from calendar_client_api.event import Event, EventPatch
 from outlook_client_service_client.api.events import (
     create_event_events_post,
     delete_event_events_event_id_delete,
+    list_events_events_get,
     update_event_events_event_id_patch,
 )
 from outlook_client_service_client.client import Client as GeneratedClient
@@ -109,7 +110,17 @@ class ServiceClientAdapter(Client):
         types: list[str] | None = None,
     ) -> list[Event]:
         """Return a list of calendar events, with optional filters."""
-        raise NotImplementedError
+        result = list_events_events_get.sync(
+            client=self._client,
+            start=start,
+            end=end,
+        )
+        if result is None:
+            return []
+        if isinstance(result, HTTPValidationError):
+            msg = f"list_events validation failed: {result.to_dict()}"
+            raise TypeError(msg)
+        return [self._event_from_response(ev) for ev in result]
 
     def create_event(
         self,
