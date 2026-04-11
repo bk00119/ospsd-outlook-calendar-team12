@@ -7,7 +7,7 @@ import pytest
 from calendar_client_api.event import Event as LegacyEvent
 from calendar_client_api.exceptions import CalendarNotFoundError
 from ospsd_calendar_api.exceptions import CalendarOperationError, EventNotFoundError
-from outlook_client_impl.outlook_impl import OutlookSharedClient
+from outlook_client_impl.shared_outlook_impl import OutlookSharedClient
 
 
 class FakeLegacyEvent(LegacyEvent):
