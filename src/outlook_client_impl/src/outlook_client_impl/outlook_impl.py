@@ -590,7 +590,6 @@ class OutlookClient(Client):
         return self.get_event(clean_event_id)
 
 
-
 def get_client_impl(*, interactive: bool = False) -> Client:
     """Return a configured :class:`OutlookClient` instance."""
     return OutlookClient(interactive=interactive)

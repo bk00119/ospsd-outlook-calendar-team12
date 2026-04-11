@@ -10,6 +10,7 @@ dependencies = [
     "msal",
     "msgraph-sdk",
     "azure-identity",
+    "ospsd-calendar-api",
 ]
 
 [project.optional-dependencies]
@@ -30,3 +31,4 @@ packages = ["src/outlook_client_impl"]
 
 [tool.uv.sources]
 calendar-client-api = { workspace = true }
+ospsd-calendar-api = { git = "https://github.com/DeMoliT1on/ospsd-calendar-api" }
