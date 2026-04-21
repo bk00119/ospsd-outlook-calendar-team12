@@ -4,13 +4,22 @@ requires-python = ">=3.11"
 
 [manifest]
 members = [
+    "ai-client-api",
     "calendar-client-api",
+    "gemini-ai-client-impl",
+    "intelligent-app-service",
+    "issue-tracker-client-adapter",
     "outlook-client-impl",
     "outlook-client-service",
     "outlook-client-service-api-client",
     "outlook-service-client-adapter",
     "team12-calendar-client-api",
 ]
+
+[[package]]
+name = "ai-client-api"
+version = "0.1.0"
+source = { editable = "src/ai_client_api" }
 
 [[package]]
 name = "aiohappyeyeballs"
@@ -707,6 +716,17 @@ wheels = [
 ]
 
 [[package]]
+name = "gemini-ai-client-impl"
+version = "0.1.0"
+source = { editable = "src/gemini_ai_client_impl" }
+dependencies = [
+    { name = "ai-client-api" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "ai-client-api", editable = "src/ai_client_api" }]
+
+[[package]]
 name = "ghp-import"
 version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -829,6 +849,28 @@ sdist = { url = "https://files.pythonhosted.org/packages/72/34/14ca021ce8e5dfedc
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl", hash = "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12", size = 7484, upload-time = "2025-10-18T21:55:41.639Z" },
 ]
+
+[[package]]
+name = "intelligent-app-service"
+version = "0.1.0"
+source = { editable = "src/intelligent_app_service" }
+dependencies = [
+    { name = "ai-client-api" },
+    { name = "calendar-client-api" },
+    { name = "issue-tracker-client-adapter" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "ai-client-api", editable = "src/ai_client_api" },
+    { name = "calendar-client-api", editable = "src/calendar_client_api" },
+    { name = "issue-tracker-client-adapter", editable = "src/issue_tracker_client_adapter" },
+]
+
+[[package]]
+name = "issue-tracker-client-adapter"
+version = "0.1.0"
+source = { editable = "src/issue_tracker_client_adapter" }
 
 [[package]]
 name = "itsdangerous"

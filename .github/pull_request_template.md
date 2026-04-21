@@ -27,6 +27,10 @@
 - [ ] `outlook_client_impl`
 - [ ] `outlook_client_service`
 - [ ] `outlook_service_client_adapter`
+- [ ] `ai_client_api`
+- [ ] `gemini_ai_client_impl`
+- [ ] `issue_tracker_client_adapter`
+- [ ] `intelligent_app_service`
 - [ ] Documentation
 - [ ] Tests
 - [ ] Tooling / CI
