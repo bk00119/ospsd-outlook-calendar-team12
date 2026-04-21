@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from calendar_client_api.exceptions import CalendarNotFoundError
@@ -61,8 +62,11 @@ class OutlookSharedClient(SharedCalendarClient):
 
     def list_events(self, start: datetime, end: datetime) -> list[SharedEvent]:
         """Return shared events whose time range intersects [start, end)."""
+        if start >= end:
+            return []
         try:
-            legacy_events = self._legacy_client.list_events(start=start, end=end, types=None)
+            adjusted_end = end - timedelta(microseconds=1)
+            legacy_events = self._legacy_client.list_events(start=start, end=adjusted_end, types=None)
         except Exception as exc:
             self._raise_shared_error(exc)
             raise

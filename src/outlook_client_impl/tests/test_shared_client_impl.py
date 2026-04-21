@@ -1,6 +1,6 @@
 """Tests for shared API implementation in outlook_client_impl."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
@@ -54,16 +54,17 @@ def test_list_events_maps_to_shared_event_model() -> None:
     """Shared client should return ospsd Event models."""
     start = datetime(2026, 4, 11, 9, 0, tzinfo=UTC)
     end = datetime(2026, 4, 11, 10, 0, tzinfo=UTC)
+    adjusted_end = end - timedelta(microseconds=1)
     legacy = MagicMock()
-    legacy.list_events.return_value = [FakeLegacyEvent("evt-1", start, end)]
+    legacy.list_events.return_value = [FakeLegacyEvent("evt-1", start, adjusted_end)]
     client = OutlookSharedClient(legacy_client=legacy)
 
     events = client.list_events(start=start, end=end)
 
     assert events[0].id == "evt-1"
     assert events[0].start_time == start
-    assert events[0].end_time == end
-    legacy.list_events.assert_called_once_with(start=start, end=end, types=None)
+    assert events[0].end_time == adjusted_end
+    legacy.list_events.assert_called_once_with(start=start, end=adjusted_end, types=None)
 
 
 def test_update_event_maps_shared_kwargs_to_legacy_patch() -> None:
