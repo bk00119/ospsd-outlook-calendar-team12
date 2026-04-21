@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from datetime import timedelta
+from typing import TYPE_CHECKING
 
 from calendar_client_api.exceptions import CalendarNotFoundError
 from ospsd_calendar_api.client import CalendarClient as SharedCalendarClient
@@ -18,7 +19,7 @@ from calendar_client_api import event as legacy_event
 from outlook_client_impl.outlook_impl import OutlookClient
 
 if TYPE_CHECKING:
-    import datetime
+    from datetime import datetime
 
     from calendar_client_api.event import Event as LegacyEvent
     from msgraph.graph_service_client import GraphServiceClient
@@ -59,27 +60,32 @@ class OutlookSharedClient(SharedCalendarClient):
             raise SharedEventNotFoundError(str(exc)) from exc
         raise SharedCalendarOperationError(str(exc)) from exc
 
-    def list_events(self, start: datetime.datetime, end: datetime.datetime) -> list[SharedEvent]:
+    def list_events(self, start: datetime, end: datetime) -> list[SharedEvent]:
         """Return shared events whose time range intersects [start, end)."""
+        if start >= end:
+            return []
         try:
-            legacy_events = self._legacy_client.list_events(start=start, end=end, types=None)
-        except Exception as exc:  # noqa: BLE001
+            adjusted_end = end - timedelta(microseconds=1)
+            legacy_events = self._legacy_client.list_events(start=start, end=adjusted_end, types=None)
+        except Exception as exc:
             self._raise_shared_error(exc)
+            raise
         return [self._to_shared_event(event) for event in legacy_events]
 
     def get_event(self, event_id: str) -> SharedEvent:
         """Get one event by id using shared event model."""
         try:
             legacy_evt = self._legacy_client.get_event(event_id=event_id)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             self._raise_shared_error(exc)
+            raise
         return self._to_shared_event(legacy_evt)
 
     def create_event(
         self,
         title: str,
-        start: datetime.datetime,
-        end: datetime.datetime,
+        start_time: datetime,
+        end_time: datetime,
         description: str = "",
         location: str | None = None,
     ) -> SharedEvent:
@@ -87,42 +93,47 @@ class OutlookSharedClient(SharedCalendarClient):
         try:
             legacy_evt = self._legacy_client.create_event(
                 title=title,
-                starts_at=start,
-                ends_at=end,
+                starts_at=start_time,
+                ends_at=end_time,
                 description=description or None,
                 location=location,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             self._raise_shared_error(exc)
+            raise
         return self._to_shared_event(legacy_evt)
 
-    def update_event(self, event_id: str, **kwargs: Any) -> SharedEvent:  # noqa: ANN401
+    def update_event( # noqa: PLR0913
+        self,
+        event_id: str,
+        *,
+        title: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        description: str | None = None,
+        location: str | None = None) -> SharedEvent:
         """Update event fields and return shared event model."""
-        allowed = {"title", "start_time", "end_time", "description", "location"}
-        unknown = set(kwargs) - allowed
-        if unknown:
-            msg = f"Unsupported update fields: {sorted(unknown)}"
-            raise ValueError(msg)
-
         patch = legacy_event.EventPatch(
-            title=cast("str | None", kwargs.get("title")),
-            starts_at=cast("datetime.datetime | None", kwargs.get("start_time")),
-            ends_at=cast("datetime.datetime | None", kwargs.get("end_time")),
-            description=cast("str | None", kwargs.get("description")),
-            location=cast("str | None", kwargs.get("location")),
+            title=title,
+            starts_at=start_time,
+            ends_at=end_time,
+            description=description,
+            location=location,
         )
         try:
             updated_legacy_evt = self._legacy_client.update_event(event_id=event_id, payload=patch)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             self._raise_shared_error(exc)
+            raise
         return self._to_shared_event(updated_legacy_evt)
 
     def delete_event(self, event_id: str) -> None:
         """Delete an event through the legacy implementation."""
         try:
             self._legacy_client.delete_event(event_id=event_id)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             self._raise_shared_error(exc)
+            raise
 
 
 def get_shared_client_impl(*, interactive: bool = False) -> SharedCalendarClient:
