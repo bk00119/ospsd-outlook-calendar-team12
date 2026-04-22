@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass
@@ -15,12 +18,14 @@ class TextGenerationRequest:
         context: Optional additional context to guide the model (e.g.,
             serialized events, issues, or metadata).
         max_tokens: Optional upper bound on response length.
+        tools: Optional list of Python functions (tools) the AI can invoke.
 
     """
 
     prompt: str
     context: dict[str, Any] | None = None
     max_tokens: int | None = None
+    tools: list[Callable[..., Any]] | None = None
 
 
 @dataclass

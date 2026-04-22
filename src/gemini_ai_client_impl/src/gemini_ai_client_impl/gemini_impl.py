@@ -1,10 +1,13 @@
-
-
 """Gemini implementation of AIClient."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import os
+from typing import TYPE_CHECKING, cast
+
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 
 from ai_client_api import (
     AIClient,
@@ -15,6 +18,9 @@ from ai_client_api import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from typing import Any
+
     from gemini_ai_client_impl.config import GeminiConfig
 
 
@@ -24,20 +30,45 @@ class GeminiAIClient(AIClient):
     def __init__(self, config: GeminiConfig) -> None:
         """Initialize Gemini client with configuration."""
         self._config = config
-        # TODO: Initialize Gemini SDK client here
+        load_dotenv()
+
+        api_key = config.api_key or os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            msg = "GEMINI_API_KEY environment variable is not set."
+            raise ValueError(msg)
+
+        self._client = genai.Client(api_key=api_key)
 
     def generate_text(
         self,
         request: TextGenerationRequest,
     ) -> TextGenerationResponse:
-        """Generate text from a prompt using Gemini."""
-        # TODO: Call Gemini API and return response
-        raise NotImplementedError
+        """Generate text from a prompt using Gemini (via Google SDK)."""
+        tools = cast("list[types.Tool | Callable[..., Any]] | None", request.tools)
+        content_config = (
+            types.GenerateContentConfig(
+                tools=tools,
+                max_output_tokens=request.max_tokens,
+            )
+            if tools is not None or request.max_tokens is not None
+            else None
+        )
+
+        prompt = request.prompt
+        if request.context:
+            prompt = f"System Context:\n{request.context}\n\nUser Task:\n{prompt}"
+
+        response = self._client.models.generate_content(
+            model=self._config.model,
+            contents=prompt,
+            config=content_config,
+        )
+
+        return TextGenerationResponse(text=response.text or "")
 
     def generate_structured(
         self,
         request: StructuredGenerationRequest,
     ) -> StructuredGenerationResponse:
         """Generate structured output using Gemini."""
-        # TODO: Call Gemini API and parse structured output
         raise NotImplementedError

@@ -19,7 +19,7 @@ class GeminiConfig:
     """
 
     api_key: str
-    model: str = "gemini-1.5-flash"
+    model: str = "models/gemma-4-31b-it"
 
 
 def load_gemini_config() -> GeminiConfig:
@@ -29,6 +29,6 @@ def load_gemini_config() -> GeminiConfig:
         msg = "GEMINI_API_KEY is not set"
         raise ValueError(msg)
 
-    model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    model = os.getenv("GEMINI_MODEL", "models/gemma-4-31b-it")
 
     return GeminiConfig(api_key=api_key, model=model)
