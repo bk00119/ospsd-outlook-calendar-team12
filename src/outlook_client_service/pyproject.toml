@@ -3,7 +3,7 @@ name = "outlook-client-service"
 version = "0.1.0"
 description = "A FastAPI service for interacting with Outlook calendar APIs"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "fastapi",
     "uvicorn",
@@ -12,6 +12,9 @@ dependencies = [
     "itsdangerous",
     "calendar-client-api",
     "outlook-client-impl",
+    "intelligent-app-service",
+    "chat-client-api",
+    "slack-client-impl",
 ]
 
 [project.optional-dependencies]
@@ -34,3 +37,6 @@ packages = ["src/outlook_client_service"]
 [tool.uv.sources]
 calendar-client-api = { workspace = true }
 outlook-client-impl = { workspace = true }
+intelligent-app-service = { workspace = true }
+chat-client-api = { git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source", branch = "feat/hw3", subdirectory = "components/chat_client_api" }
+slack-client-impl = { git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source", branch = "feat/hw3", subdirectory = "components/slack_client_impl" }
