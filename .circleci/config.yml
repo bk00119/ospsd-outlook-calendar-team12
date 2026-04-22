@@ -153,21 +153,26 @@ jobs:
       - store_artifacts:
           path: test-results/integration
 
-  # Job 6: Deploy to Render
+  # Job 6: Deploy to Fly.io
   deploy:
     docker:
       - image: cimg/base:stable
     steps:
+      - checkout
       - run:
-          name: "Trigger Render Deploy"
+          name: "Install flyctl"
           command: |
-            if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-              echo "ERROR: RENDER_DEPLOY_HOOK_URL is not set."
+            curl -L https://fly.io/install.sh | sh
+            echo 'export FLYCTL_INSTALL="$HOME/.fly"' >> $BASH_ENV
+            echo 'export PATH="$HOME/.fly/bin:$PATH"' >> $BASH_ENV
+      - run:
+          name: "Deploy to Fly.io"
+          command: |
+            if [ -z "$FLY_API_TOKEN" ]; then
+              echo "ERROR: FLY_API_TOKEN is not set in CircleCI environment variables."
               exit 1
             fi
-            echo "Triggering Render deployment..."
-            curl -sf "$RENDER_DEPLOY_HOOK_URL" || { echo "Deploy hook request failed."; exit 1; }
-            echo "Render deployment triggered successfully."
+            flyctl deploy --remote-only --config fly.toml
 
   # Job 7: Report Summary
   report_summary:
@@ -262,7 +267,7 @@ workflows:
                 - main
                 - develop
 
-      # Deploy to Render after tests pass (hw-2 branch only)
+      # Deploy to Fly.io after tests pass (hw-3 branch only)
       - deploy:
           requires:
             - lint
@@ -270,7 +275,7 @@ workflows:
           filters:
             branches:
               only:
-                - hw-2
+                - hw-3
 
       # Optional: Report summary after core tests
       - report_summary:
