@@ -162,9 +162,11 @@ jobs:
       - run:
           name: "Install flyctl"
           command: |
-            curl -L https://fly.io/install.sh | sh
-            echo 'export FLYCTL_INSTALL="$HOME/.fly"' >> $BASH_ENV
-            echo 'export PATH="$HOME/.fly/bin:$PATH"' >> $BASH_ENV
+            # The installer prompts "add to PATH? (Y/n)" on non-TTY stdin and
+            # exits non-zero; the binary is installed fine by then, so swallow
+            # the exit code and wire PATH ourselves.
+            curl -L https://fly.io/install.sh | sh || true
+            "$HOME/.fly/bin/flyctl" version
       - run:
           name: "Deploy to Fly.io"
           command: |
@@ -172,7 +174,7 @@ jobs:
               echo "ERROR: FLY_API_TOKEN is not set in CircleCI environment variables."
               exit 1
             fi
-            flyctl deploy --remote-only --config fly.toml
+            "$HOME/.fly/bin/flyctl" deploy --remote-only --config fly.toml
 
   # Job 7: Report Summary
   report_summary:
