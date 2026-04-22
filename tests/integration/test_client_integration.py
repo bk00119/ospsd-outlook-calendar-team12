@@ -18,9 +18,10 @@ pytestmark = pytest.mark.integration
 
 @pytest.mark.circleci
 def test_importing_implementation_registers_client_factory() -> None:
-    """Import side effects wire the API factory to the Outlook implementation."""
+    """Explicit registration wires the API factory to the Outlook implementation."""
     importlib.reload(calendar_client_api)
     importlib.reload(outlook_client_impl)
+    outlook_client_impl.register()
 
     assert calendar_client_api.get_client.__module__ == "outlook_client_impl.outlook_impl"
     assert calendar_client_api.get_client.__name__ == "get_client_impl"
@@ -30,9 +31,10 @@ def test_importing_implementation_registers_client_factory() -> None:
 def test_get_client_returns_outlook_client_after_registration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Factory returns OutlookClient when implementation package is imported."""
+    """Factory returns OutlookClient after explicit registration."""
     importlib.reload(calendar_client_api)
     importlib.reload(outlook_client_impl)
+    outlook_client_impl.register()
 
     fake_service = cast("GraphServiceClient", object())
 
@@ -60,9 +62,10 @@ def test_get_client_returns_outlook_client_after_registration(
 
 @pytest.mark.circleci
 def test_importing_implementation_registers_event_factory() -> None:
-    """Import side effects wire the API event factory to Outlook event implementation."""
+    """Explicit registration wires the API event factory to Outlook event implementation."""
     importlib.reload(calendar_client_api)
     importlib.reload(outlook_client_impl)
+    outlook_client_impl.register()
 
     event = calendar_client_api.get_event(
         event_id="evt-123",
@@ -81,6 +84,7 @@ def test_di_client_exposes_expected_interface_methods(
     """DI-created client exposes the expected interface methods."""
     importlib.reload(calendar_client_api)
     importlib.reload(outlook_client_impl)
+    outlook_client_impl.register()
 
     fake_service = cast("GraphServiceClient", object())
 

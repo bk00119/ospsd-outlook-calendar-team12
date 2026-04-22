@@ -153,7 +153,23 @@ jobs:
       - store_artifacts:
           path: test-results/integration
 
-  # Job 6: Report Summary
+  # Job 6: Deploy to Render
+  deploy:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - run:
+          name: "Trigger Render Deploy"
+          command: |
+            if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+              echo "ERROR: RENDER_DEPLOY_HOOK_URL is not set."
+              exit 1
+            fi
+            echo "Triggering Render deployment..."
+            curl -sf "$RENDER_DEPLOY_HOOK_URL" || { echo "Deploy hook request failed."; exit 1; }
+            echo "Render deployment triggered successfully."
+
+  # Job 7: Report Summary
   report_summary:
     docker:
       - image: cimg/base:stable # Use a basic image for reporting
@@ -219,8 +235,6 @@ workflows:
               ignore:
                 - main
                 - develop
-                - kamen-requierd-fixes
-                - make-real-deletions
       - lint:
           requires:
             - build
@@ -229,8 +243,6 @@ workflows:
               ignore:
                 - main
                 - develop
-                - kamen-requierd-fixes
-                - make-real-deletions
 
       - unit_test:
           requires:
@@ -240,8 +252,6 @@ workflows:
               ignore:
                 - main
                 - develop
-                - kamen-requierd-fixes
-                - make-real-deletions
 
       - circleci_test:
           requires:
@@ -251,8 +261,16 @@ workflows:
               ignore:
                 - main
                 - develop
-                - kamen-requierd-fixes
-                - make-real-deletions
+
+      # Deploy to Render after tests pass (hw-2 branch only)
+      - deploy:
+          requires:
+            - lint
+            - circleci_test
+          filters:
+            branches:
+              only:
+                - hw-2
 
       # Optional: Report summary after core tests
       - report_summary:
@@ -264,8 +282,6 @@ workflows:
               ignore:
                 - main
                 - develop
-                - kamen-requierd-fixes
-                - make-real-deletions
 
   # Enhanced workflow: Full tests with real credentials (main/develop only)
   full_integration:
@@ -276,8 +292,6 @@ workflows:
               only:
                 - main
                 - develop # Add other branches as needed
-                - kamen-requierd-fixes
-                - make-real-deletions
 
       - lint:
           requires:
@@ -287,8 +301,6 @@ workflows:
               only:
                 - main
                 - develop
-                - kamen-requierd-fixes
-                - make-real-deletions
 
       - unit_test:
           requires:
@@ -298,8 +310,6 @@ workflows:
               only:
                 - main
                 - develop
-                - kamen-requierd-fixes
-                - make-real-deletions
 
       - circleci_test:
           requires:
@@ -309,8 +319,6 @@ workflows:
               only:
                 - main
                 - develop
-                - kamen-requierd-fixes
-                - make-real-deletions
 
       - integration_test:
           requires:
@@ -321,8 +329,17 @@ workflows:
               only:
                 - main
                 - develop
-                - kamen-requierd-fixes
-                - make-real-deletions
+
+      - deploy:
+          requires:
+            - lint
+            - circleci_test
+            - integration_test
+          filters:
+            branches:
+              only:
+                - main
+                - develop
 
       - report_summary:
           requires:
@@ -334,5 +351,3 @@ workflows:
               only:
                 - main
                 - develop
-                - kamen-requierd-fixes
-                - make-real-deletions

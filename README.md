@@ -28,20 +28,27 @@ Implementation is injected into the contract at runtime through Dependency Injec
 - `calendar_client_api`: Defines the abstract base class, `Client`, which is the contract of what the interface of a calendar client can do
 - `outlook_client_impl`: Implements the `OutlookClient` class - a concrete implementation of the Calendar Client that uses Microsoft Graph to perform contract actions on Outlook Calendar
 
+### Service Components
+- `outlook_client_service`: FastAPI service that exposes the calendar operations over HTTP with OAuth 2.0 authentication
+- `outlook_client_service_api_client`: Auto-generated Python client created from the service's OpenAPI spec
+- `outlook_service_client_adapter`: Adapter that implements the `Client` ABC by delegating to the generated client, enabling location-transparent usage
+
 ### Project Structure
 ```
 OSPSD-OUTLOOK-CALENDAR-TEAM12/
-├── src/                          # Source packages (uv workspace members)
-│   ├── calendar_client_api/      # Abstract calendar client base class (ABC)
-│   └── outlook_client_impl/      # Outlook Calendar specific client implementation
-├── tests/                        # Integration and E2E tests
-│   ├── integration/              # Component integration tests
-│   └── e2e/                      # End-to-end application tests
-├── docs/                         # Documentation source files
-├── .circleci/                    # CircleCI configuration
-├── main.py                       # Main application entry point
-├── pyproject.toml                # Project configuration (dependencies, tools)
-└── uv.lock                       # Locked dependency versions
+├── src/
+│   ├── calendar_client_api/              # Abstract client interface (ABC)
+│   ├── outlook_client_impl/              # Microsoft Graph implementation
+│   ├── outlook_client_service/           # FastAPI service
+│   ├── outlook_client_service_api_client/# Auto-generated HTTP client
+│   └── outlook_service_client_adapter/   # Adapter back to Client ABC
+├── tests/
+│   ├── integration/                      # DI wiring and adapter integration tests
+│   └── e2e/                              # End-to-end tests
+├── docs/                                 # MkDocs documentation source
+├── .circleci/                            # CircleCI configuration
+├── pyproject.toml                        # Workspace config (dependencies, tools)
+└── uv.lock                              # Locked dependency versions
 ```
 
 ## Project Setup
@@ -118,8 +125,19 @@ OSPSD-OUTLOOK-CALENDAR-TEAM12/
     # Run integration tests
     uv run pytest -m integration
 
-    # Run end to end tests
-    uv run pytest -m e2e
+    # Run end to end tests on local library
+    E2E=1 \
+    E2E_CLIENT_FACTORY=local \
+    uv run pytest -m e2e --no-cov
+  
+    # Run end to end tests on remote service
+    # You can change the base url to the remote server address.
+    # Before running this, please login with your browser first, then copy and paste the session value to the variable below.
+    E2E=1 \
+    E2E_CLIENT_FACTORY=service \
+    OUTLOOK_CLIENT_SERVICE_BASE_URL=http://localhost:8000 \
+    OUTLOOK_CLIENT_SERVICE_SESSION='...' \
+    uv run pytest -m e2e --no-cov
 
     # With coverage report
     uv run pytest --cov=src --cov-report=term-missing
@@ -131,9 +149,48 @@ OSPSD-OUTLOOK-CALENDAR-TEAM12/
     ```
     Open your browser to `http://127.0.0.1:8000` to view the site.
 
-## Continuous Integration
+## Running the Service Locally
+
+```bash
+uv run uvicorn outlook_client_service.main:app --reload
+```
+
+The service will be available at `http://localhost:8000`. Visit `/docs` for the interactive API documentation.
+
+**Required environment variables:**
+
+| Variable | Description |
+|----------|-------------|
+| `AZURE_CLIENT_ID` | Azure app registration client ID |
+| `AZURE_CLIENT_SECRET` | Azure app registration client secret |
+| `AZURE_AUTHORITY` | `https://login.microsoftonline.com/consumers` |
+| `SESSION_SECRET_KEY` | Secret key for session middleware |
+| `CORS_ORIGINS` | Comma-separated allowed origins |
+
+## Deployment
+
+The service is deployed on [Render](https://render.com):
+
+- **URL**: `https://ospsd-outlook-calendar-team12.onrender.com`
+- **Health check**: `https://ospsd-outlook-calendar-team12.onrender.com/health`
+- **OpenAPI spec**: `https://ospsd-outlook-calendar-team12.onrender.com/openapi.json`
+
+Secrets are managed through Render's environment variable settings.
+
+## Continuous Integration & Deployment
 
 The project uses CircleCI (`.circleci/config.yml`) with two workflows:
 
 - **All Branches**: Build, lint, unit tests, and CI-compatible integration tests
 - **Main/Develop**: Additional integration tests with real Microsoft Graph API calls using credentials from the `outlook-client` CircleCI context
+
+**Automatic Deployment**: Every push to the `hw-2` branch triggers the full CI pipeline in CircleCI. After lint and tests pass, CircleCI triggers a Render deploy via a deploy hook. This ensures only passing builds are deployed.
+
+**CI/CD Environment Variables** (set in CircleCI project settings):
+
+| Variable | Description |
+|----------|-------------|
+| `RENDER_DEPLOY_HOOK_URL` | Render deploy hook URL (from Render Dashboard > Service > Settings > Deploy Hook) |
+| `AZURE_CLIENT_ID` | Azure app registration client ID |
+| `AZURE_CLIENT_SECRET` | Azure app registration client secret |
+| `AZURE_TENANT_ID` | Azure tenant ID |

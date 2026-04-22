@@ -4,9 +4,11 @@ This module provides an MSAL-backed `AuthManager` that supports:
 - Interactive auth (browser)
 - Silent auth via a serialized token cache on disk
 - Creating a `GraphServiceClient` using an `azure.core.credentials.TokenCredential` adapter
+- Creating a `GraphServiceClient` from an already-acquired access token
 
 The cache files under `.auth/` contain sensitive tokens and must not be committed.
 """
+
 import json
 import time
 from pathlib import Path
@@ -187,6 +189,23 @@ class AuthManager:
             expires_on = int(time.time()) + 3600
             return AccessToken(token_str, expires_on)
 
+    class _StaticAccessTokenCredential(TokenCredential):
+        """TokenCredential backed by an already-acquired access token."""
+
+        def __init__(self, access_token: str, expires_on: int | None = None) -> None:
+            self._access_token = access_token
+            self._expires_on = expires_on or (int(time.time()) + 3600)
+
+        def get_token(
+            self,
+            *scopes: str,
+            **kwargs: object,
+        ) -> AccessToken:
+            """Return the stored access token as an AccessToken instance."""
+            _ = scopes
+            _ = kwargs
+            return AccessToken(self._access_token, self._expires_on)
+
     def get_credential(self) -> TokenCredential:
         """Return a TokenCredential adapter backed by this AuthManager."""
         return AuthManager._MsalCredential(self)
@@ -194,3 +213,18 @@ class AuthManager:
     def get_graph_client(self) -> GraphServiceClient:
         """Create an authenticated GraphServiceClient using the MSAL-backed credential."""
         return GraphServiceClient(credentials=self.get_credential(), scopes=self.scopes)
+
+    @classmethod
+    def get_graph_client_from_access_token(
+        cls,
+        access_token: str,
+        scopes: list[str],
+        *,
+        expires_on: int | None = None,
+    ) -> GraphServiceClient:
+        """Create a GraphServiceClient from an already-acquired access token."""
+        credential = cls._StaticAccessTokenCredential(
+            access_token=access_token,
+            expires_on=expires_on,
+        )
+        return GraphServiceClient(credentials=credential, scopes=scopes)
