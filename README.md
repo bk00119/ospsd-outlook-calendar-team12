@@ -169,13 +169,37 @@ The service will be available at `http://localhost:8000`. Visit `/docs` for the 
 
 ## Deployment
 
-The service is deployed on [Render](https://render.com):
+The service is deployed on [Fly.io](https://fly.io):
 
-- **URL**: `https://ospsd-outlook-calendar-team12.onrender.com`
-- **Health check**: `https://ospsd-outlook-calendar-team12.onrender.com/health`
-- **OpenAPI spec**: `https://ospsd-outlook-calendar-team12.onrender.com/openapi.json`
+- **URL**: `https://ospsd-outlook-calendar-team12.fly.dev`
+- **Health check**: `https://ospsd-outlook-calendar-team12.fly.dev/health`
+- **OpenAPI spec**: `https://ospsd-outlook-calendar-team12.fly.dev/openapi.json`
 
-Secrets are managed through Render's environment variable settings.
+Application secrets (`AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `GEMINI_API_KEY`,
+`SESSION_SECRET_KEY`, etc.) are set via `fly secrets set KEY=value` and stored in
+Fly.io's encrypted secrets manager — never committed to source control.
+
+### Infrastructure as Code (Terraform)
+
+The Fly.io app, dedicated IPs, and machine are declared as code in the
+[`terraform/`](terraform/) directory and applied with Terraform. See
+[`terraform/README.md`](terraform/README.md) for the `init`/`plan`/`apply` workflow.
+
+### Telemetry (OpenTelemetry)
+
+The service is instrumented with OpenTelemetry for distributed tracing and
+structured JSON logging via `structlog`. Traces are shipped over OTLP/HTTP to
+Grafana Cloud (or any OTLP-compatible backend) when
+`OTEL_EXPORTER_OTLP_ENDPOINT` is set; otherwise they fall back to the console
+exporter for local development.
+
+Relevant env vars:
+
+| Variable | Description |
+|----------|-------------|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP endpoint (e.g. Grafana Cloud tempo URL) |
+| `OTEL_EXPORTER_OTLP_HEADERS` | `Authorization=Basic <base64>` header for the backend |
+| `APP_ENV` | `prod` / `dev` — tagged on every span as `deployment.environment` |
 
 ## Continuous Integration & Deployment
 
@@ -184,13 +208,13 @@ The project uses CircleCI (`.circleci/config.yml`) with two workflows:
 - **All Branches**: Build, lint, unit tests, and CI-compatible integration tests
 - **Main/Develop**: Additional integration tests with real Microsoft Graph API calls using credentials from the `outlook-client` CircleCI context
 
-**Automatic Deployment**: Every push to the `hw-2` branch triggers the full CI pipeline in CircleCI. After lint and tests pass, CircleCI triggers a Render deploy via a deploy hook. This ensures only passing builds are deployed.
+**Automatic Deployment**: Every push to the `hw-3` branch triggers the full CI pipeline in CircleCI. After lint and tests pass, CircleCI runs `flyctl deploy` to build the Docker image remotely and roll the new version onto Fly.io. Only passing builds are deployed.
 
 **CI/CD Environment Variables** (set in CircleCI project settings):
 
 | Variable | Description |
 |----------|-------------|
-| `RENDER_DEPLOY_HOOK_URL` | Render deploy hook URL (from Render Dashboard > Service > Settings > Deploy Hook) |
+| `FLY_API_TOKEN` | Fly.io deploy token (from `fly tokens create deploy`) |
 | `AZURE_CLIENT_ID` | Azure app registration client ID |
 | `AZURE_CLIENT_SECRET` | Azure app registration client secret |
 | `AZURE_TENANT_ID` | Azure tenant ID |
