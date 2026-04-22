@@ -267,7 +267,7 @@ workflows:
                 - main
                 - develop
 
-      # Deploy to Fly.io after tests pass (hw-3 branch only)
+      # Deploy to Fly.io after tests pass (hw-3 and tester branch)
       - deploy:
           requires:
             - lint
@@ -276,6 +276,7 @@ workflows:
             branches:
               only:
                 - hw-3
+                - jaik/hw3-deployment-telemetry
 
       # Optional: Report summary after core tests
       - report_summary:
