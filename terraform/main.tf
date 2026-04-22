@@ -10,10 +10,7 @@ terraform {
 }
 
 provider "fly" {
-  fly_api_token    = var.fly_api_token
-  useinternaltunnel = true
-  internaltunnelorg = var.fly_org
-  internaltunnelregion = var.fly_region
+  fly_api_token = var.fly_api_token
 }
 
 resource "fly_app" "service" {
