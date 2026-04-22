@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from dotenv import load_dotenv
 from google import genai
@@ -18,6 +18,9 @@ from ai_client_api import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from typing import Any
+
     from gemini_ai_client_impl.config import GeminiConfig
 
 
@@ -41,13 +44,15 @@ class GeminiAIClient(AIClient):
         request: TextGenerationRequest,
     ) -> TextGenerationResponse:
         """Generate text from a prompt using Gemini (via Google SDK)."""
-        config_kwargs = {}
-        if request.tools:
-            config_kwargs["tools"] = request.tools
-        if request.max_tokens:
-            config_kwargs["max_output_tokens"] = request.max_tokens
-
-        content_config = types.GenerateContentConfig(**config_kwargs) if config_kwargs else None
+        tools = cast("list[types.Tool | Callable[..., Any]] | None", request.tools)
+        content_config = (
+            types.GenerateContentConfig(
+                tools=tools,
+                max_output_tokens=request.max_tokens,
+            )
+            if tools is not None or request.max_tokens is not None
+            else None
+        )
 
         prompt = request.prompt
         if request.context:

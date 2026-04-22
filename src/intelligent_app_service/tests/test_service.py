@@ -1,6 +1,8 @@
 """Tests for the IntelligentAppService AI Orchestration layer."""
 
+from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -20,7 +22,7 @@ def _make_service(
     return IntelligentAppService(ai_client=ai, calendar_client=cal), ai, cal
 
 
-def _extract_tools(mock_ai: MagicMock) -> dict[str, object]:
+def _extract_tools(mock_ai: MagicMock) -> dict[str, Callable[..., Any]]:
     """Extract the tool functions passed to the AI from the last generate_text call."""
     req_obj = mock_ai.generate_text.call_args.args[0]
     return {t.__name__: t for t in req_obj.tools}
