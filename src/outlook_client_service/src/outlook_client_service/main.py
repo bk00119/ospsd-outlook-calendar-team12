@@ -7,6 +7,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from outlook_client_service.config import settings
 from outlook_client_service.routers import auth, chat, events, health
+from outlook_client_service.telemetry import configure_telemetry
 
 
 def create_app() -> FastAPI:
@@ -40,6 +41,8 @@ def create_app() -> FastAPI:
     def root() -> RedirectResponse:
         """Redirect root to the login page."""
         return RedirectResponse(url="/auth/login")
+
+    configure_telemetry(app)
 
     return app
 
