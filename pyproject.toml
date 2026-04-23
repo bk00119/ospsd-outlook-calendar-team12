@@ -30,7 +30,6 @@ members = [
     "src/outlook_service_client_adapter",
     "src/ai_client_api",
     "src/gemini_ai_client_impl",
-    "src/issue_tracker_client_adapter",
     "src/intelligent_app_service",
 ]
 
@@ -68,7 +67,6 @@ mypy_path = [
     "src/outlook_service_client_adapter/src",
     "src/ai_client_api/src",
     "src/gemini_ai_client_impl/src",
-    "src/issue_tracker_client_adapter/src",
     "src/intelligent_app_service/src",
 ]
 ignore_missing_imports = false
@@ -88,7 +86,6 @@ pythonpath = [
     "src/outlook_service_client_adapter/src",
     "src/ai_client_api/src",
     "src/gemini_ai_client_impl/src",
-    "src/issue_tracker_client_adapter/src",
     "src/intelligent_app_service/src",
 ]
 testpaths = ["tests", "src/*/tests"]
