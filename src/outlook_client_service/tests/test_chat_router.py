@@ -1,10 +1,3 @@
-"""Integration tests for the /chat endpoint.
-
-These tests verify that:
-- The /chat endpoint wires the AI service to the chat vertical correctly.
-- The AI response is sent back to the Slack channel via the chat client.
-- FastAPI dependency injection can be overridden for isolated testing.
-"""
 from __future__ import annotations
 
 from http import HTTPStatus
