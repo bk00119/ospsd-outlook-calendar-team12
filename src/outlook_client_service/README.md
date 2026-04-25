@@ -82,6 +82,39 @@ The dependency layer in `dependencies.py` is responsible for:
 This keeps route handlers thin and ensures that routing code depends on the abstract client
 interface rather than directly embedding Graph setup logic.
 
+## Slack Integration (Polling)
+
+This service also supports a Slack-based interaction flow using a polling mechanism.
+
+### Overview
+
+The poller reads messages from a configured Slack channel and routes user requests
+to the intelligent application service. Only messages that mention the bot
+(e.g., `<@BOT_USER_ID>`) are processed.
+
+### Configuration
+
+- `SLACK_BOT_USER_ID`: bot user ID for mention detection  
+- `SLACK_TEST_CHANNEL_ID`: channel to monitor  
+- `SLACK_USER_TIMEZONE` (optional): default timezone (default: `America/New_York`)
+
+### Notes
+
+- Uses polling instead of webhooks  
+- Assumes single-instance with in-memory state  
+- User timezone is not available via chat API, so a default is used  
+
+### Entry Point
+
+The polling loop is implemented in:
+
+```
+outlook_client_service/slack_poller.py
+```
+
+A simple runner script can be used to start the poller during development.
+
+
 ## Project Structure
 
 ```text

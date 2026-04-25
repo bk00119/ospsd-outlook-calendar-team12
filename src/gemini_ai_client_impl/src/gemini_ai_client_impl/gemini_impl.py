@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import TYPE_CHECKING, cast
 
 from dotenv import load_dotenv
@@ -22,6 +23,8 @@ if TYPE_CHECKING:
     from typing import Any
 
     from gemini_ai_client_impl.config import GeminiConfig
+
+MAX_RETRY_TIME = 3
 
 
 class GeminiAIClient(AIClient):
@@ -45,26 +48,44 @@ class GeminiAIClient(AIClient):
     ) -> TextGenerationResponse:
         """Generate text from a prompt using Gemini (via Google SDK)."""
         tools = cast("list[types.Tool | Callable[..., Any]] | None", request.tools)
-        content_config = (
-            types.GenerateContentConfig(
-                tools=tools,
-                max_output_tokens=request.max_tokens,
-            )
-            if tools is not None or request.max_tokens is not None
-            else None
+
+        system_instruction: str | None = None
+        if request.context is not None:
+            raw_system_instruction = request.context.get("system_instructions")
+            if isinstance(raw_system_instruction, str) and raw_system_instruction.strip():
+                system_instruction = raw_system_instruction.strip()
+
+        content_config = types.GenerateContentConfig(
+            tools=tools,
+            max_output_tokens=request.max_tokens,
+            system_instruction=system_instruction,
         )
 
-        prompt = request.prompt
-        if request.context:
-            prompt = f"System Context:\n{request.context}\n\nUser Task:\n{prompt}"
+        last_error: Exception | None = None
+        for attempt in range(MAX_RETRY_TIME):
+            try:
+                response = self._client.models.generate_content(
+                    model=self._config.model,
+                    contents=request.prompt,
+                    config=content_config,
+                )
+                return TextGenerationResponse(text=response.text or "")
+            except Exception as exc:
+                last_error = exc
+                if attempt < MAX_RETRY_TIME - 1:
+                    time.sleep(1.0 * (attempt + 1))
+                    continue
+                err_msg = (
+                    "Gemini generate_content failed after 3 attempts "
+                    f"for model '{self._config.model}': {exc!r}"
+                )
+                raise RuntimeError(err_msg) from exc
 
-        response = self._client.models.generate_content(
-            model=self._config.model,
-            contents=prompt,
-            config=content_config,
+        err_msg = (
+            "Gemini generate_content failed without returning a response. "
+            f"Last error: {last_error!r}"
         )
-
-        return TextGenerationResponse(text=response.text or "")
+        raise RuntimeError(err_msg)
 
     def generate_structured(
         self,

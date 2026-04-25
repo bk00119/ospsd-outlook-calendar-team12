@@ -17,8 +17,15 @@ class IntelligentAppService:
         self._calendar = calendar_client
         self._ai = ai_client
 
-    def process_chat(self, message: str, user_timezone: str = "UTC") -> str:  # noqa: C901
+    def process_chat(self, message: str, user_timezone: str = "UTC") -> str:  # noqa: C901, PLR0915
         """Process a natural language message and trigger calendar actions via AI."""
+        last_tool_result: str | None = None
+
+        def _record_tool_result(message: str) -> str:
+            """Store the latest tool result for fallback replies."""
+            nonlocal last_tool_result
+            last_tool_result = message
+            return message
 
         def create_outlook_event(
             title: str,
@@ -46,7 +53,15 @@ class IntelligentAppService:
                 location=location,
                 description=description,
             )
-            return f"Successfully created event: {event.id}"
+            summary = (
+                f"Created event '{event.title}' (ID: {event.id}) "
+                f"from {event.starts_at} to {event.ends_at}."
+            )
+            if event.location:
+                summary += f" Location: {event.location}."
+            if event.description:
+                summary += f" Description: {event.description}"
+            return _record_tool_result(summary)
 
         def list_my_events(start_iso_string: str, end_iso_string: str) -> str:
             """Retrieve the user's calendar events within a specific time range.
@@ -61,17 +76,19 @@ class IntelligentAppService:
             events = self._calendar.list_events(start=starts_at, end=ends_at)
 
             if not events:
-                return "The calendar is completely free during this time block!"
+                return _record_tool_result("The calendar is completely free during this time block!")
 
             lines = []
             for e in events:
-                parts = [f"Event: {e.title} (ID: {e.id}) from {e.starts_at} to {e.ends_at}"]
+                parts = [
+                    f"Event '{e.title}' (ID: {e.id}) from {e.starts_at} to {e.ends_at}.",
+                ]
                 if e.location:
-                    parts.append(f"  Location: {e.location}")
+                    parts.append(f"Location: {e.location}.")
                 if e.description:
-                    parts.append(f"  Description: {e.description}")
-                lines.append("\n".join(parts))
-            return "\n".join(lines)
+                    parts.append(f"Description: {e.description}")
+                lines.append(" ".join(parts))
+            return _record_tool_result("\n".join(lines))
 
         def delete_outlook_event(event_id: str) -> str:
             """Delete a calendar event by its ID.
@@ -81,7 +98,7 @@ class IntelligentAppService:
 
             """
             self._calendar.delete_event(event_id)
-            return f"Successfully deleted event {event_id}"
+            return _record_tool_result(f"Deleted event {event_id}.")
 
         def get_outlook_event(event_id: str) -> str:
             """Retrieve details of a specific calendar event.
@@ -93,14 +110,17 @@ class IntelligentAppService:
             try:
                 event = self._calendar.get_event(event_id)
             except (LookupError, RuntimeError) as e:
-                return f"Error finding event: {e}"
-            else:
-                details = f"Event {event.id}: '{event.title}' starts at {event.starts_at} and ends at {event.ends_at}."
-                if event.location:
-                    details += f" Location: {event.location}."
-                if event.description:
-                    details += f" Description: {event.description}"
-                return details
+                return _record_tool_result(f"Error finding event: {e}")
+
+            details = (
+                f"Event '{event.title}' (ID: {event.id}) starts at {event.starts_at} "
+                f"and ends at {event.ends_at}."
+            )
+            if event.location:
+                details += f" Location: {event.location}."
+            if event.description:
+                details += f" Description: {event.description}"
+            return _record_tool_result(details)
 
         def update_outlook_event(  # noqa: PLR0913
             event_id: str,
@@ -129,7 +149,15 @@ class IntelligentAppService:
                 description=new_description,
             )
             event = self._calendar.update_event(event_id, patch)
-            return f"Successfully updated event {event.id}"
+            summary = (
+                f"Updated event '{event.title}' (ID: {event.id}) "
+                f"to run from {event.starts_at} to {event.ends_at}."
+            )
+            if event.location:
+                summary += f" Location: {event.location}."
+            if event.description:
+                summary += f" Description: {event.description}"
+            return _record_tool_result(summary)
 
         # Combine context with the user's message
         system_prompt = get_system_context(user_timezone)
@@ -146,5 +174,22 @@ class IntelligentAppService:
             ],
         )
 
-        response = self._ai.generate_text(request)
-        return response.text
+        try:
+            response = self._ai.generate_text(request)
+        except Exception as exc:
+            if last_tool_result is not None:
+                return (
+                    f"The calendar action appears to have succeeded, but the AI failed while "
+                    f"generating the final reply. Latest tool result: {last_tool_result}"
+                )
+            err_msg = f"AI generation failed before any tool completed: {exc}"
+            raise RuntimeError(err_msg) from exc
+
+        if response.text:
+            return response.text
+
+        if last_tool_result is not None:
+            return last_tool_result
+
+        err_msg = "AI returned an empty response and no tool result was recorded."
+        raise RuntimeError(err_msg)
