@@ -68,6 +68,15 @@ When an event endpoint needs a Graph client, the dependency layer retrieves a va
 token from the session. If the token is near expiration or missing, the service attempts
 to refresh it using the stored refresh token before constructing the Graph client.
 
+### Multi-User (Slack) Authentication
+
+For Slack-based interactions, the service supports multi-user access without a database.
+
+- The `/auth/login` endpoint accepts an optional `slack_user_id` query parameter.
+- After OAuth completes, the user’s token data is bound in-memory to that Slack user ID.
+- The Slack poller resolves the sender (`slack_user_id`) to a calendar session at runtime.
+
+This design assumes a **single-instance deployment** with in-memory state.
 ### Dependency Injection
 
 The service uses FastAPI dependency injection to provide configured services and shared
@@ -91,6 +100,8 @@ This service also supports a Slack-based interaction flow using a polling mechan
 The poller reads messages from a configured Slack channel and routes user requests
 to the intelligent application service. Only messages that mention the bot
 (e.g., `<@BOT_USER_ID>`) are processed.
+
+Authentication is resolved per message using the sender's Slack user ID.
 
 ### Configuration
 

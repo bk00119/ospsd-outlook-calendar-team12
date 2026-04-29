@@ -20,6 +20,10 @@ class Settings:
 
     azure_client_id: str = os.getenv("AZURE_CLIENT_ID", "")
     azure_client_secret: str = os.getenv("AZURE_CLIENT_SECRET", "")
+    azure_login_uri: str = os.getenv(
+        "AZURE_LOGIN_URI",
+        "http://localhost:8000/auth/login",
+    )
     azure_redirect_uri: str = os.getenv(
         "AZURE_REDIRECT_URI",
         "http://localhost:8000/auth/callback",

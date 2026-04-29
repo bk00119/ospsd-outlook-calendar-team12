@@ -6,15 +6,15 @@ import logging
 import os
 import time
 from collections import deque
-from typing import TYPE_CHECKING
+from threading import Thread
 
 import slack_client_impl  # noqa: F401
 from chat_client_api.client import get_client
 from dotenv import load_dotenv
 from intelligent_app_service.wiring import get_intelligent_app
 
-if TYPE_CHECKING:
-    from intelligent_app_service import IntelligentAppService
+from outlook_client_service.config import settings
+from outlook_client_service.dependencies import get_calendar_client_for_slack_user
 
 POLL_INTERVAL_SECONDS = 5
 DEFAULT_LIMIT = 20
@@ -27,6 +27,7 @@ DEFAULT_USER_TIMEZONE = "America/New_York"
 
 logger = logging.getLogger(__name__)
 
+_poller_thread: Thread | None = None
 
 class ProcessedMessageStore:
     """Track processed Slack message IDs with bounded memory growth."""
@@ -128,17 +129,29 @@ def _require_env(name: str, value: str | None) -> str:
     raise ValueError(err_msg)
 
 
+def _build_auth_link(slack_user_id: str) -> str:
+    """Build an authentication link for a Slack user."""
+    return f"{settings.azure_login_uri}?slack_user_id={slack_user_id}"
+
+
 def _handle_message(
     sender: str,
     text: str,
     bot_user_id: str,
     user_timezone: str,
-    service: IntelligentAppService,
 ) -> str | None:
     """Process one Slack message and return a reply if needed."""
     user_text = _strip_bot_mention(text, bot_user_id)
     if not user_text:
         return None
+
+    calendar_client = get_calendar_client_for_slack_user(sender)
+
+    if calendar_client is None:
+        auth_link = _build_auth_link(sender)
+        return f"<@{sender}> Please connect your calendar first: {auth_link}"
+
+    service = get_intelligent_app(calendar_client=calendar_client)
 
     logger.info("Processing Slack message from %s: %s", sender, user_text)
     try:
@@ -159,7 +172,6 @@ def run_slack_poller() -> None:
     user_timezone = os.getenv(USER_TIMEZONE_ENV, DEFAULT_USER_TIMEZONE)
 
     chat_client = get_client()
-    service = get_intelligent_app()
 
     processed_store = ProcessedMessageStore(MAX_PROCESSED_IDS)
     message_guard = SlackMessageGuard(bot_user_id, processed_store)
@@ -193,16 +205,17 @@ def run_slack_poller() -> None:
                     text=msg.text,
                     bot_user_id=bot_user_id,
                     user_timezone=user_timezone,
-                    service=service,
                 )
                 if response is None:
                     processed_store.mark(msg.message_id)
                     continue
 
                 logger.info("Sending Slack reply for message %s", msg.message_id)
+                sender_mention = f"<@{msg.sender}>"
+                final_reply = response if response.startswith(sender_mention) else f"{sender_mention} {response}"
                 chat_client.send_message(
                     channel_id=channel_id,
-                    text=response,
+                    text=final_reply,
                 )
                 processed_store.mark(msg.message_id)
 
@@ -210,3 +223,19 @@ def run_slack_poller() -> None:
             logger.exception("Slack polling loop error")
 
         time.sleep(POLL_INTERVAL_SECONDS)
+
+
+def start_slack_poller_background() -> None:
+    """Start the Slack poller in a daemon background thread."""
+    global _poller_thread  # noqa: PLW0603
+    if _poller_thread is not None and _poller_thread.is_alive():
+        logger.info("Slack poller background thread is already running.")
+        return
+
+    _poller_thread = Thread(
+        target=run_slack_poller,
+        name="slack-poller",
+        daemon=True,
+    )
+    _poller_thread.start()
+    logger.info("Started Slack poller background thread.")

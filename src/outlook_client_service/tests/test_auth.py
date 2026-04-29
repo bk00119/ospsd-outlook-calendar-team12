@@ -38,6 +38,12 @@ def request_with_session() -> Request:
     return Request(scope)
 
 
+@pytest.fixture(autouse=True)
+def clear_slack_user_token_store() -> None:
+    """Clear Slack user token bindings between tests."""
+    auth._slack_user_token_store.clear()
+
+
 class TestStoreTokenData:
     """Group tests for storing token data in the session."""
 
@@ -128,7 +134,10 @@ class TestStoreTokenData:
 class TestLogin:
     """Group tests for the login route."""
 
-    def test_login_returns_redirect_response_when_configured(self) -> None:
+    def test_login_returns_redirect_response_when_configured(
+        self,
+        request_with_session: Request,
+    ) -> None:
         """Return a redirect response when OAuth settings are configured."""
         settings_stub = OAuthSettingsStub(
             azure_authority="https://login.example.com",
@@ -137,7 +146,7 @@ class TestLogin:
         )
 
         with patch("outlook_client_service.routers.auth.settings", settings_stub):
-            response = auth.login()
+            response = auth.login(request_with_session)
 
         location = response.headers["location"]
         parsed = urlparse(location)
@@ -155,7 +164,10 @@ class TestLogin:
             "offline_access https://graph.microsoft.com/Calendars.ReadWrite",
         ]
 
-    def test_login_raises_when_client_id_is_missing(self) -> None:
+    def test_login_raises_when_client_id_is_missing(
+        self,
+        request_with_session: Request,
+    ) -> None:
         """Raise an HTTP exception when client ID is missing."""
         settings_stub = OAuthSettingsStub(
             azure_authority="https://login.example.com",
@@ -167,10 +179,27 @@ class TestLogin:
             "outlook_client_service.routers.auth.settings",
             settings_stub,
         ), pytest.raises(HTTPException) as exc_info:
-            auth.login()
+            auth.login(request_with_session)
 
         assert exc_info.value.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
         assert exc_info.value.detail == "AZURE_CLIENT_ID is not configured."
+
+
+    def test_login_stores_slack_user_id(
+        self,
+        request_with_session: Request,
+    ) -> None:
+        """Store Slack user ID in session when provided."""
+        settings_stub = OAuthSettingsStub(
+            azure_authority="https://login.example.com",
+            azure_redirect_uri="http://localhost:8000/auth/callback",
+            azure_client_id="client-id-123",
+        )
+
+        with patch("outlook_client_service.routers.auth.settings", settings_stub):
+            auth.login(request_with_session, slack_user_id="U123")
+
+        assert request_with_session.session[auth.SESSION_SLACK_USER_ID] == "U123"
 
 
 class TestLogout:
@@ -188,6 +217,68 @@ class TestLogout:
 
         assert request_with_session.session == {}
         assert response == {"message": "Logged out successfully."}
+
+
+    def test_logout_removes_slack_user_binding(
+        self,
+        request_with_session: Request,
+    ) -> None:
+        """Remove Slack user token binding during logout."""
+        request_with_session.session[auth.SESSION_SLACK_USER_ID] = "U123"
+        auth._slack_user_token_store["U123"] = {"access_token": "access-token"}
+
+        response = auth.logout(request_with_session)
+
+        assert auth.get_slack_user_token_data("U123") is None
+        assert request_with_session.session == {}
+        assert response == {"message": "Logged out successfully."}
+
+
+
+class TestSlackUserBinding:
+    """Group tests for Slack user token binding helpers."""
+
+    def test_bind_slack_user_stores_current_token_data(
+        self,
+        request_with_session: Request,
+    ) -> None:
+        """Bind current session token data to a Slack user."""
+        request_with_session.session[auth.SESSION_SLACK_USER_ID] = "U123"
+        request_with_session.session["access_token"] = "access-token"
+        request_with_session.session["refresh_token"] = "refresh-token"
+        request_with_session.session["expires_in"] = EXPIRES_IN_LONG
+        request_with_session.session["expires_at"] = EXPECTED_EXPIRES_AT_LONG
+
+        auth.bind_slack_user_to_current_session(request_with_session)
+
+        token_data = auth.get_slack_user_token_data("U123")
+        assert token_data is not None
+        assert token_data["access_token"] == "access-token"
+        assert token_data["refresh_token"] == "refresh-token"
+        assert token_data["expires_in"] == EXPIRES_IN_LONG
+        assert token_data["expires_at"] == EXPECTED_EXPIRES_AT_LONG
+
+    def test_bind_slack_user_skips_when_slack_user_id_is_missing(
+        self,
+        request_with_session: Request,
+    ) -> None:
+        """Skip binding when Slack user ID is not stored in session."""
+        request_with_session.session["access_token"] = "access-token"
+
+        auth.bind_slack_user_to_current_session(request_with_session)
+
+        assert auth.get_slack_user_token_data("U123") is None
+
+    def test_bind_slack_user_skips_when_access_token_is_missing(
+        self,
+        request_with_session: Request,
+    ) -> None:
+        """Skip binding when access token is not stored in session."""
+        request_with_session.session[auth.SESSION_SLACK_USER_ID] = "U123"
+
+        auth.bind_slack_user_to_current_session(request_with_session)
+
+        assert auth.get_slack_user_token_data("U123") is None
 
 
 class TestRefreshAccessToken:
@@ -427,6 +518,7 @@ class TestCallback:
                     "expires_in": EXPIRES_IN_LONG,
                 }
 
+        request_with_session.session[auth.SESSION_SLACK_USER_ID] = "U123"
         mock_post.return_value = DummyResponse()
 
         with patch(
@@ -443,6 +535,11 @@ class TestCallback:
         assert request_with_session.session["refresh_token"] == "new-refresh"
         assert request_with_session.session["expires_in"] == EXPIRES_IN_LONG
         assert request_with_session.session["expires_at"] == EXPECTED_EXPIRES_AT_LONG
+
+        token_data = auth.get_slack_user_token_data("U123")
+        assert token_data is not None
+        assert token_data["access_token"] == "new-access"
+        assert token_data["refresh_token"] == "new-refresh"
 
         call_kwargs = mock_post.call_args.kwargs
         assert call_kwargs["data"]["grant_type"] == "authorization_code"
