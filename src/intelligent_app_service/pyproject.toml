@@ -1,13 +1,12 @@
 [project]
 name = "intelligent-app-service"
 version = "0.1.0"
-description = "Intelligent application service orchestrating calendar, issue tracker, and AI clients"
+description = "Intelligent application service orchestrating calendar, chat, and AI clients"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "ai-client-api",
     "calendar-client-api",
-    "issue-tracker-client-adapter",
 ]
 
 [build-system]
@@ -23,4 +22,3 @@ packages = ["src/intelligent_app_service"]
 [tool.uv.sources]
 ai-client-api = { workspace = true }
 calendar-client-api = { workspace = true }
-issue-tracker-client-adapter = { workspace = true }

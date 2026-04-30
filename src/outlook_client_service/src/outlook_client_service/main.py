@@ -1,5 +1,8 @@
 """FastAPI application entrypoint for the Outlook client service."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
@@ -7,8 +10,15 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from outlook_client_service.config import settings
 from outlook_client_service.routers import auth, chat, events, health
+from outlook_client_service.slack_poller import start_slack_poller_background
 from outlook_client_service.telemetry import configure_telemetry
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Manage application startup and shutdown."""
+    start_slack_poller_background()
+    yield
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
@@ -16,6 +26,7 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         description=settings.app_description,
         version=settings.app_version,
+        lifespan=lifespan,
     )
 
     app.add_middleware(

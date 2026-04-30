@@ -16,6 +16,15 @@ SCOPES = [
     "https://graph.microsoft.com/Calendars.ReadWrite",
 ]
 
+SESSION_SLACK_USER_ID = "slack_user_id"
+_SESSION_TOKEN_KEYS = (
+    "access_token",
+    "refresh_token",
+    "expires_in",
+    "expires_at",
+)
+
+_slack_user_token_store: dict[str, dict[str, object]] = {}
 
 router = APIRouter()
 
@@ -38,9 +47,43 @@ def _store_token_data(request: Request, token_data: dict[str, object]) -> None:
         request.session["expires_at"] = int(time.time()) + expires_in
 
 
+def _current_session_token_data(request: Request) -> dict[str, object]:
+    """Return token data currently stored in the session."""
+    return {
+        key: value
+        for key in _SESSION_TOKEN_KEYS
+        if (value := request.session.get(key)) is not None
+    }
+
+
+def bind_slack_user_to_current_session(request: Request) -> None:
+    """Bind the current authenticated calendar session to a Slack user."""
+    slack_user_id = request.session.get(SESSION_SLACK_USER_ID)
+    if not isinstance(slack_user_id, str) or not slack_user_id:
+        return
+
+    token_data = _current_session_token_data(request)
+    access_token = token_data.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        return
+
+    _slack_user_token_store[slack_user_id] = token_data
+
+
+def get_slack_user_token_data(slack_user_id: str) -> dict[str, object] | None:
+    """Return stored token data for a Slack user, if available."""
+    return _slack_user_token_store.get(slack_user_id)
+
+
 @router.get("/login")
-def login() -> RedirectResponse:
+def login(
+    request: Request,
+    slack_user_id: Annotated[str | None, Query()] = None,
+) -> RedirectResponse:
     """Redirect the user to Microsoft's authorization page."""
+    if slack_user_id:
+        request.session[SESSION_SLACK_USER_ID] = slack_user_id
+
     if not settings.azure_client_id:
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="AZURE_CLIENT_ID is not configured.")
 
@@ -59,6 +102,10 @@ def login() -> RedirectResponse:
 @router.post("/logout")
 def logout(request: Request) -> dict[str, str]:
     """Clear the current session."""
+    slack_user_id = request.session.get(SESSION_SLACK_USER_ID)
+    if isinstance(slack_user_id, str):
+        _slack_user_token_store.pop(slack_user_id, None)
+
     request.session.clear()
     return {"message": "Logged out successfully."}
 
@@ -139,4 +186,5 @@ def callback(
     if response.status_code != HTTPStatus.OK:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=token_data)
     _store_token_data(request, token_data)
+    bind_slack_user_to_current_session(request)
     return {"message": "Authentication successful."}

@@ -50,13 +50,16 @@ def _make_client(
 ) -> TestClient:
     """Build a TestClient with mocked AI service and chat client."""
     from outlook_client_service.main import create_app
-    from outlook_client_service.routers.chat import get_chat_client, get_intelligent_app
+    from outlook_client_service.routers.chat import (
+        get_chat_client,
+        get_chat_intelligent_app,
+    )
 
     mock_service = MagicMock()
     mock_service.process_chat.return_value = ai_response
 
     app = create_app()
-    app.dependency_overrides[get_intelligent_app] = lambda: mock_service
+    app.dependency_overrides[get_chat_intelligent_app] = lambda: mock_service
     app.dependency_overrides[get_chat_client] = lambda: mock_chat
     return TestClient(app)
 
@@ -105,14 +108,17 @@ def test_chat_sends_message_to_channel() -> None:
 def test_chat_passes_timezone_to_service() -> None:
     """POST /chat/ should forward the user's timezone to the AI service."""
     from outlook_client_service.main import create_app
-    from outlook_client_service.routers.chat import get_chat_client, get_intelligent_app
+    from outlook_client_service.routers.chat import (
+        get_chat_client,
+        get_chat_intelligent_app,
+    )
 
     mock_service = MagicMock()
     mock_service.process_chat.return_value = "Done."
     mock_chat = _MockChatClient()
 
     app = create_app()
-    app.dependency_overrides[get_intelligent_app] = lambda: mock_service
+    app.dependency_overrides[get_chat_intelligent_app] = lambda: mock_service
     app.dependency_overrides[get_chat_client] = lambda: mock_chat
 
     TestClient(app).post(

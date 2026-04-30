@@ -38,10 +38,15 @@ def get_chat_client() -> ChatClient:
     return _get_chat_impl()
 
 
+def get_chat_intelligent_app() -> IntelligentAppService:
+    """Return the default intelligent app service for the chat route."""
+    return get_intelligent_app()
+
+
 @router.post("/")
 def chat(
     body: ChatRequest,
-    service: Annotated[IntelligentAppService, Depends(get_intelligent_app)],
+    service: Annotated[IntelligentAppService, Depends(get_chat_intelligent_app)],
     chat_client: Annotated[ChatClient, Depends(get_chat_client)],
 ) -> ChatResponse:
     """Process a natural language calendar command via AI and respond through chat.
