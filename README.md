@@ -179,11 +179,13 @@ Application secrets (`AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `GEMINI_API_KEY`,
 `SESSION_SECRET_KEY`, etc.) are set via `fly secrets set KEY=value` and stored in
 Fly.io's encrypted secrets manager — never committed to source control.
 
-### Infrastructure as Code (Terraform)
+### Infrastructure as Code (fly.toml)
 
-The Fly.io app, dedicated IPs, and machine are declared as code in the
-[`terraform/`](terraform/) directory and applied with Terraform. See
-[`terraform/README.md`](terraform/README.md) for the `init`/`plan`/`apply` workflow.
+Deployment infrastructure is declared in [`fly.toml`](fly.toml) at the repo
+root: app name, region, VM size, port mapping, HTTPS, healthcheck, and
+auto-stop/auto-start policy. `flyctl deploy --config fly.toml` from a clean
+state provisions and rolls the app, making the file the single source of
+truth for Fly.io infrastructure.
 
 ### Telemetry (OpenTelemetry)
 

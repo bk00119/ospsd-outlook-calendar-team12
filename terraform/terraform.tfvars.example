@@ -1,6 +1,0 @@
-# Copy to terraform.tfvars and fill in — terraform.tfvars is gitignored.
-fly_api_token = "fo1_your_token_here"
-fly_org       = "personal"
-fly_region    = "ewr"
-app_name      = "ospsd-outlook-calendar-team12"
-image         = "registry.fly.io/ospsd-outlook-calendar-team12:latest"

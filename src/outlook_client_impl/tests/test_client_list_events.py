@@ -113,48 +113,71 @@ def test_list_events_works_with_sync_get() -> None:
     assert results[0].id == "e1"
 
 
-def test_list_events_filter_start_excludes_earlier_events() -> None:
-    """Events starting before `start` are excluded."""
+def test_list_events_filter_start_excludes_events_ending_before_window() -> None:
+    """Events that end at or before `start` are excluded (no overlap)."""
     items = [
-        _make_item("early", start="2026-03-01T08:00:00+00:00"),
-        _make_item("late", start="2026-03-01T14:00:00+00:00"),
+        _make_item("ends-before", start="2026-03-01T08:00:00+00:00", end="2026-03-01T09:00:00+00:00"),
+        _make_item("overlaps", start="2026-03-01T13:00:00+00:00", end="2026-03-01T14:00:00+00:00"),
     ]
     cutoff = datetime.datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
     results = _client(items).list_events(start=cutoff)
 
     assert len(results) == 1
-    assert results[0].id == "late"
+    assert results[0].id == "overlaps"
 
 
-def test_list_events_filter_start_includes_event_at_boundary() -> None:
-    """An event starting exactly at `start` is included."""
-    items = [_make_item("e1", start="2026-03-01T12:00:00+00:00")]
+def test_list_events_filter_start_excludes_event_ending_at_boundary() -> None:
+    """An event whose end equals `start` is excluded (half-open window)."""
+    items = [_make_item("e1", start="2026-03-01T11:00:00+00:00", end="2026-03-01T12:00:00+00:00")]
     cutoff = datetime.datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
     results = _client(items).list_events(start=cutoff)
 
-    assert len(results) == 1
+    assert results == []
 
 
-def test_list_events_filter_end_excludes_later_events() -> None:
-    """Events ending after `end` are excluded."""
+def test_list_events_filter_end_excludes_events_starting_after_window() -> None:
+    """Events that start at or after `end` are excluded (no overlap)."""
     items = [
-        _make_item("early", end="2026-03-01T10:00:00+00:00"),
-        _make_item("late", end="2026-03-01T18:00:00+00:00"),
+        _make_item("overlaps", start="2026-03-01T11:00:00+00:00", end="2026-03-01T11:30:00+00:00"),
+        _make_item("starts-after", start="2026-03-01T13:00:00+00:00", end="2026-03-01T18:00:00+00:00"),
     ]
     cutoff = datetime.datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
     results = _client(items).list_events(end=cutoff)
 
     assert len(results) == 1
-    assert results[0].id == "early"
+    assert results[0].id == "overlaps"
 
 
-def test_list_events_filter_end_includes_event_at_boundary() -> None:
-    """An event ending exactly at `end` is included."""
-    items = [_make_item("e1", end="2026-03-01T12:00:00+00:00")]
+def test_list_events_filter_end_excludes_event_starting_at_boundary() -> None:
+    """An event whose start equals `end` is excluded (half-open window)."""
+    items = [_make_item("e1", start="2026-03-01T12:00:00+00:00", end="2026-03-01T13:00:00+00:00")]
     cutoff = datetime.datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
     results = _client(items).list_events(end=cutoff)
 
-    assert len(results) == 1
+    assert results == []
+
+
+def test_list_events_returns_partially_overlapping_events() -> None:
+    """Events that start before the window and end inside it must be returned.
+
+    Regression test for the bug TA review flagged: under strict-containment
+    filtering, a 1:30-2:30 PM meeting was silently dropped from a 2-3 PM
+    query, masking real calendar conflicts.
+    """
+    items = [
+        _make_item("starts-before-ends-inside", start="2026-03-01T13:30:00+00:00", end="2026-03-01T14:30:00+00:00"),
+        _make_item("starts-inside-ends-after", start="2026-03-01T14:30:00+00:00", end="2026-03-01T15:30:00+00:00"),
+        _make_item("fully-contains-window", start="2026-03-01T13:00:00+00:00", end="2026-03-01T16:00:00+00:00"),
+    ]
+    window_start = datetime.datetime(2026, 3, 1, 14, 0, tzinfo=UTC)
+    window_end = datetime.datetime(2026, 3, 1, 15, 0, tzinfo=UTC)
+    results = _client(items).list_events(start=window_start, end=window_end)
+
+    assert {r.id for r in results} == {
+        "starts-before-ends-inside",
+        "starts-inside-ends-after",
+        "fully-contains-window",
+    }
 
 
 def test_list_events_filter_types_single() -> None:
@@ -194,9 +217,9 @@ def test_list_events_filter_types_no_match_returns_empty() -> None:
 def test_list_events_combined_start_and_types() -> None:
     """Start and types filters are applied together."""
     items = [
-        _make_item("e1", start="2026-03-01T08:00:00+00:00", event_type="singleInstance"),
-        _make_item("e2", start="2026-03-01T14:00:00+00:00", event_type="singleInstance"),
-        _make_item("e3", start="2026-03-01T14:00:00+00:00", event_type="occurrence"),
+        _make_item("e1", start="2026-03-01T08:00:00+00:00", end="2026-03-01T09:00:00+00:00", event_type="singleInstance"),
+        _make_item("e2", start="2026-03-01T14:00:00+00:00", end="2026-03-01T15:00:00+00:00", event_type="singleInstance"),
+        _make_item("e3", start="2026-03-01T14:00:00+00:00", end="2026-03-01T15:00:00+00:00", event_type="occurrence"),
     ]
     cutoff = datetime.datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
     results = _client(items).list_events(start=cutoff, types=["singleInstance"])
