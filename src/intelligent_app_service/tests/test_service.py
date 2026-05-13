@@ -72,6 +72,8 @@ def test_tool_create_event_calls_calendar() -> None:
 
     mock_event = MagicMock()
     mock_event.id = "evt-created-1"
+    mock_event.description = None
+    mock_event.location = None
     mock_cal.list_events.return_value = []
     mock_cal.create_event.return_value = mock_event
 
@@ -213,6 +215,8 @@ def test_tool_update_event_calls_calendar() -> None:
 
     mock_event = MagicMock()
     mock_event.id = "evt-updated-1"
+    mock_event.description = None
+    mock_event.location = None
     mock_cal.update_event.return_value = mock_event
 
     service.process_chat(message="test")
