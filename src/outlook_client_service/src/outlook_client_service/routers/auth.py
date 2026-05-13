@@ -179,6 +179,70 @@ def refresh_access_token(request: Request) -> str:
     return stored_access_token
 
 
+def _refresh_slack_user_token_data(slack_user_id: str, token_data: dict[str, object]) -> str | None:
+    """Refresh and store token data for a Slack-linked calendar session."""
+    refresh_token = token_data.get("refresh_token")
+    if not isinstance(refresh_token, str) or not refresh_token:
+        _slack_user_token_store.pop(slack_user_id, None)
+        return None
+
+    token_url = f"{settings.azure_authority}/oauth2/v2.0/token"
+    data = {
+        "client_id": settings.azure_client_id,
+        "client_secret": settings.azure_client_secret,
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "redirect_uri": settings.azure_redirect_uri,
+        "scope": " ".join(SCOPES),
+    }
+
+    response = requests.post(token_url, data=data, timeout=10)
+    refreshed_token_data = response.json()
+    if response.status_code != HTTPStatus.OK:
+        _slack_user_token_store.pop(slack_user_id, None)
+        return None
+
+    access_token = refreshed_token_data.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        _slack_user_token_store.pop(slack_user_id, None)
+        return None
+
+    new_token_data = dict(token_data)
+    new_token_data["access_token"] = access_token
+
+    new_refresh_token = refreshed_token_data.get("refresh_token")
+    if isinstance(new_refresh_token, str) and new_refresh_token:
+        new_token_data["refresh_token"] = new_refresh_token
+
+    expires_in = refreshed_token_data.get("expires_in")
+    if isinstance(expires_in, int):
+        new_token_data["expires_in"] = expires_in
+        new_token_data["expires_at"] = int(time.time()) + expires_in
+
+    _slack_user_token_store[slack_user_id] = new_token_data
+    return access_token
+
+
+def get_valid_access_token_for_slack_user(
+    slack_user_id: str,
+    refresh_buffer_seconds: int = 60,
+) -> str | None:
+    """Return a valid access token for a Slack-linked calendar session."""
+    token_data = get_slack_user_token_data(slack_user_id)
+    if token_data is None:
+        return None
+
+    access_token = token_data.get("access_token")
+    expires_at = token_data.get("expires_at")
+    now = int(time.time())
+
+    if isinstance(access_token, str) and access_token:
+        if isinstance(expires_at, int) and now < expires_at - refresh_buffer_seconds:
+            return access_token
+        return _refresh_slack_user_token_data(slack_user_id, token_data)
+
+    return _refresh_slack_user_token_data(slack_user_id, token_data)
+
 
 def get_valid_access_token(request: Request, refresh_buffer_seconds: int = 60) -> str:
     """Return a valid access token, refreshing it if it is missing or near expiry."""
