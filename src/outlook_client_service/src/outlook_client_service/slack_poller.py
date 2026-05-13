@@ -15,6 +15,7 @@ from intelligent_app_service.wiring import get_intelligent_app
 
 from outlook_client_service.config import settings
 from outlook_client_service.dependencies import get_calendar_client_for_slack_user
+from outlook_client_service.routers.auth import SLACK_AUTH_QUERY_PARAM, create_slack_auth_token
 
 POLL_INTERVAL_SECONDS = 5
 DEFAULT_LIMIT = 20
@@ -131,7 +132,8 @@ def _require_env(name: str, value: str | None) -> str:
 
 def _build_auth_link(slack_user_id: str) -> str:
     """Build an authentication link for a Slack user."""
-    return f"{settings.azure_login_uri}?slack_user_id={slack_user_id}"
+    slack_auth_token = create_slack_auth_token(slack_user_id)
+    return f"{settings.azure_login_uri}?{SLACK_AUTH_QUERY_PARAM}={slack_auth_token}"
 
 
 def _handle_message(

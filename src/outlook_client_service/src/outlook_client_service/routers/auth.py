@@ -1,5 +1,6 @@
 """Authentication routes for the Outlook client service."""
 
+import secrets
 import time
 from http import HTTPStatus
 from typing import Annotated
@@ -15,7 +16,8 @@ SCOPES = [
     "offline_access",
     "https://graph.microsoft.com/Calendars.ReadWrite",
 ]
-
+SLACK_AUTH_QUERY_PARAM = "slack_auth_token"
+SESSION_OAUTH_STATE = "oauth_state"
 SESSION_SLACK_USER_ID = "slack_user_id"
 _SESSION_TOKEN_KEYS = (
     "access_token",
@@ -25,6 +27,7 @@ _SESSION_TOKEN_KEYS = (
 )
 
 _slack_user_token_store: dict[str, dict[str, object]] = {}
+_pending_slack_auth_tokens: dict[str, str] = {}
 
 router = APIRouter()
 
@@ -75,14 +78,49 @@ def get_slack_user_token_data(slack_user_id: str) -> dict[str, object] | None:
     return _slack_user_token_store.get(slack_user_id)
 
 
+def create_slack_auth_token(slack_user_id: str) -> str:
+    """Create a short-lived auth token for linking a Slack user."""
+    token = secrets.token_urlsafe(32)
+    _pending_slack_auth_tokens[token] = slack_user_id
+    return token
+
+
+def _resolve_slack_auth_token(slack_auth_token: str) -> str:
+    """Resolve a Slack auth token to a Slack user ID"""
+    slack_user_id = _pending_slack_auth_tokens.pop(slack_auth_token, None)
+    if not slack_user_id:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="Invalid or expired Slack authentication token.",
+        )
+    return slack_user_id
+
+
+def _create_oauth_state(request: Request) -> str:
+    """Create and store an OAuth state value for CSRF protection."""
+    state = secrets.token_urlsafe(32)
+    request.session[SESSION_OAUTH_STATE] = state
+    return state
+
+
+def _verify_oauth_state(request: Request, state: str | None) -> None:
+    """Validate the OAuth state value returned by the provider."""
+    expected_state = request.session.pop(SESSION_OAUTH_STATE, None)
+    if not isinstance(expected_state, str) or state != expected_state:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="Invalid OAuth state",
+        )
+
+
 @router.get("/login")
 def login(
     request: Request,
-    slack_user_id: Annotated[str | None, Query()] = None,
+    slack_auth_token: Annotated[str | None, Query(alias=SLACK_AUTH_QUERY_PARAM)] = None,
 ) -> RedirectResponse:
     """Redirect the user to Microsoft's authorization page."""
-    if slack_user_id:
-        request.session[SESSION_SLACK_USER_ID] = slack_user_id
+    if slack_auth_token:
+        request.session[SESSION_SLACK_USER_ID] = _resolve_slack_auth_token(slack_auth_token)
 
     if not settings.azure_client_id:
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="AZURE_CLIENT_ID is not configured.")
@@ -93,6 +131,7 @@ def login(
         "redirect_uri": settings.azure_redirect_uri,
         "response_mode": "query",
         "scope": " ".join(SCOPES),
+        "state": _create_oauth_state(request),
     }
 
     auth_url = f"{settings.azure_authority}/oauth2/v2.0/authorize?{urlencode(params)}"
@@ -159,6 +198,7 @@ def get_valid_access_token(request: Request, refresh_buffer_seconds: int = 60) -
 def callback(
     request: Request,
     code: Annotated[str | None, Query()] = None,
+    state: Annotated[str | None, Query()] = None,
     error: Annotated[str | None, Query()] = None,
     error_description: Annotated[str | None, Query()] = None,
 ) -> dict[str, str]:
@@ -169,6 +209,8 @@ def callback(
 
     if not code:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="Missing authorization code.")
+
+    _verify_oauth_state(request, state)
 
     token_url = f"{settings.azure_authority}/oauth2/v2.0/token"
 

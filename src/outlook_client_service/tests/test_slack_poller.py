@@ -2,9 +2,11 @@
 
 import time as time_module
 from dataclasses import dataclass
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from chat_client_api.client import Message
+from outlook_client_service.routers import auth
 
 from outlook_client_service import slack_poller
 
@@ -214,14 +216,19 @@ def test_handle_message_returns_auth_link_for_unlinked_user(
         user_timezone="America/New_York",
     )
 
-    assert response == (
-        "<@USER_1> Please connect your calendar first: "
-        "https://example.com/auth/login?slack_user_id=USER_1"
-    )
+    assert response is not None
+    prefix = "<@USER_1> Please connect your calendar first: "
+    assert response.startswith(prefix)
+    parsed = urlparse(response.removeprefix(prefix))
+    query = parse_qs(parsed.query)
+    assert parsed.scheme == "https"
+    assert parsed.netloc == "example.com"
+    assert parsed.path == "/auth/login"
+    assert auth.SLACK_AUTH_QUERY_PARAM in query
 
 
-def test_build_auth_link_uses_slack_user_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Build an auth link containing the Slack user ID."""
+def test_build_auth_link_uses_slack_auth_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Build an auth link containing the Slack auth token."""
     monkeypatch.setattr(
         slack_poller,
         "settings",
@@ -230,7 +237,13 @@ def test_build_auth_link_uses_slack_user_id(monkeypatch: pytest.MonkeyPatch) -> 
 
     auth_link = slack_poller._build_auth_link("USER_1")
 
-    assert auth_link == "https://example.com/auth/login?slack_user_id=USER_1"
+    parsed = urlparse(auth_link)
+    query = parse_qs(parsed.query)
+
+    assert parsed.scheme == "https"
+    assert parsed.netloc == "example.com"
+    assert parsed.path == "/auth/login"
+    assert auth.SLACK_AUTH_QUERY_PARAM in query
 
 
 def test_run_slack_poller_routes_mention_to_service(monkeypatch: pytest.MonkeyPatch) -> None:
