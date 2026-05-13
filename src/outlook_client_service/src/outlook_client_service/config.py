@@ -38,5 +38,7 @@ class Settings:
         """Return parsed CORS origins as a list."""
         return [origin.strip() for origin in self.cors_origins_raw.split(",") if origin.strip()]
 
+    enable_slack_poller: bool = os.getenv("ENABLE_SLACK_POLLER", "false").lower() == "true"
+
 
 settings = Settings()
