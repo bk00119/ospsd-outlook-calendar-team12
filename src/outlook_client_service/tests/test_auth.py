@@ -9,6 +9,8 @@ import pytest
 from fastapi import HTTPException, Request
 from outlook_client_service.routers import auth
 
+from outlook_client_service import config
+
 FIXED_NOW = 1_700_000_000
 EXPIRES_IN_LONG = 3600
 EXPIRES_IN_SHORT = 1800
@@ -129,6 +131,34 @@ class TestStoreTokenData:
         assert "refresh_token" not in request_with_session.session
         assert request_with_session.session["expires_in"] == EXPIRES_IN_SHORT
         assert request_with_session.session["expires_at"] == EXPECTED_EXPIRES_AT_SHORT
+
+
+class TestSessionSecretConfig:
+    """Group tests for session secret loading."""
+
+    def test_load_session_secret_uses_configured_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Use SESSION_SECRET_KEY when it is present."""
+        monkeypatch.setenv("SESSION_SECRET_KEY", "configured-secret")
+
+        assert config._load_session_secret_key() == "configured-secret"
+
+    def test_load_session_secret_generates_dev_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Generate a non-hardcoded session secret for local development."""
+        monkeypatch.delenv("SESSION_SECRET_KEY", raising=False)
+        monkeypatch.setenv("ENVIRONMENT", "development")
+
+        secret = config._load_session_secret_key()
+
+        assert secret
+        assert secret != "dev-secret-key"
+
+    def test_load_session_secret_requires_production_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Reject production startup without an explicit session secret."""
+        monkeypatch.delenv("SESSION_SECRET_KEY", raising=False)
+        monkeypatch.setenv("ENVIRONMENT", "production")
+
+        with pytest.raises(RuntimeError, match="SESSION_SECRET_KEY"):
+            config._load_session_secret_key()
 
 
 

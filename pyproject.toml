@@ -72,9 +72,7 @@ mypy_path = [
 ignore_missing_imports = false
 
 [[tool.mypy.overrides]]
-# chat_client_api and slack_client_impl are external packages without py.typed markers.
-# Per HW3 guidance: external repos that work but lack type stubs may be excluded from type checks.
-module = ["chat_client_api", "chat_client_api.*", "slack_client_impl"]
+module = ["chat_client_api", "chat_client_api.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

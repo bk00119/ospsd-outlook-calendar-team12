@@ -31,6 +31,11 @@ class IntelligentAppService:
             last_tool_result = message
             return message
 
+        def _has_conflict(starts_at: datetime, ends_at: datetime, *, ignore_event_id: str | None = None) -> bool:
+            """Return whether any existing event overlaps a half-open time window."""
+            events = self._calendar.list_events(start=starts_at, end=ends_at)
+            return any(event.id != ignore_event_id for event in events)
+
         def _format_description(description: str | None) -> str | None:
             """Return a short plain-text description for Slack replies."""
             if not description:
@@ -63,7 +68,7 @@ class IntelligentAppService:
             """
             starts_at = datetime.fromisoformat(start_iso_string)
             ends_at = datetime.fromisoformat(end_iso_string)
-            if bool(self._calendar.list_events(start=starts_at, end=ends_at)):
+            if _has_conflict(starts_at, ends_at):
                 return _record_tool_result(
                     "Cannot create event because the requested time conflicts "
                     "with an existing calendar event.",
@@ -114,13 +119,20 @@ class IntelligentAppService:
                 lines.append(" ".join(parts))
             return _record_tool_result("\n".join(lines))
 
-        def delete_outlook_event(event_id: str) -> str:
+        def delete_outlook_event(event_id: str, confirmation: str | None = None) -> str:
             """Delete a calendar event by its ID.
 
             Args:
                 event_id: The unique ID string of the event to delete.
+                confirmation: Must exactly match event_id. This prevents accidental destructive deletes from
+                    a misclassified prompt; only provide it after the user explicitly confirms deletion.
 
             """
+            if confirmation != event_id:
+                return _record_tool_result(
+                    "Deletion requires explicit confirmation. Ask the user to confirm the exact event ID, "
+                    "then call delete_outlook_event with confirmation equal to that event ID.",
+                )
             self._calendar.delete_event(event_id)
             return _record_tool_result(f"Deleted event {event_id}.")
 
@@ -173,6 +185,15 @@ class IntelligentAppService:
                 location=new_location,
                 description=new_description,
             )
+            if patch.starts_at is not None or patch.ends_at is not None:
+                current = self._calendar.get_event(event_id)
+                candidate_start = patch.starts_at or current.starts_at
+                candidate_end = patch.ends_at or current.ends_at
+                if _has_conflict(candidate_start, candidate_end, ignore_event_id=event_id):
+                    return _record_tool_result(
+                        "Cannot update event because the requested time conflicts "
+                        "with an existing calendar event.",
+                    )
             event = self._calendar.update_event(event_id, patch)
             summary = (
                 f"Updated event '{event.title}' (ID: {event.id}) "

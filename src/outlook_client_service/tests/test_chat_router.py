@@ -1,6 +1,7 @@
 """Tests for the /chat endpoint."""
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from http import HTTPStatus
 from unittest.mock import MagicMock
 
@@ -10,7 +11,7 @@ from chat_client_api.client import Channel, Message
 from fastapi.testclient import TestClient
 
 
-class _MockChatClient(ChatClient):  # type: ignore[misc]  # ChatClient is untyped (no py.typed in chat_client_api); subclassing Any is safe here
+class _MockChatClient(ChatClient):
     """In-memory ChatClient for integration tests — records sent messages."""
 
     def __init__(self) -> None:
@@ -23,7 +24,7 @@ class _MockChatClient(ChatClient):  # type: ignore[misc]  # ChatClient is untype
             channel=channel_id,
             text=text,
             sender="bot",
-            timestamp="2026-04-22T00:00:00Z",
+            timestamp=datetime(2026, 4, 22, tzinfo=UTC),
         )
 
     def get_channels(self) -> list[Channel]:
@@ -33,7 +34,7 @@ class _MockChatClient(ChatClient):  # type: ignore[misc]  # ChatClient is untype
         raise NotImplementedError
 
     def get_messages(
-        self, channel_id: str, limit: int, cursor: str | None = None,
+        self, channel_id: str, limit: int = 10, cursor: str | None = None,
     ) -> list[Message]:
         return []
 
