@@ -46,6 +46,11 @@ class IntelligentAppService:
             """
             starts_at = datetime.fromisoformat(start_iso_string)
             ends_at = datetime.fromisoformat(end_iso_string)
+            if bool(self._calendar.list_events(start=starts_at, end=ends_at)):
+                return _record_tool_result(
+                    "Cannot create event because the requested time conflicts "
+                    "with an existing calendar event.",
+                )
             event = self._calendar.create_event(
                 title=title,
                 starts_at=starts_at,

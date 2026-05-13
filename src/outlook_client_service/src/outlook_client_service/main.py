@@ -17,7 +17,8 @@ from outlook_client_service.telemetry import configure_telemetry
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Manage application startup and shutdown."""
-    start_slack_poller_background()
+    if settings.enable_slack_poller:
+        start_slack_poller_background()
     yield
 
 def create_app() -> FastAPI:

@@ -42,6 +42,7 @@ def request_with_session() -> Request:
 def clear_slack_user_token_store() -> None:
     """Clear Slack user token bindings between tests."""
     auth._slack_user_token_store.clear()
+    auth._pending_slack_auth_tokens.clear()
 
 
 class TestStoreTokenData:
@@ -163,6 +164,8 @@ class TestLogin:
         assert query["scope"] == [
             "offline_access https://graph.microsoft.com/Calendars.ReadWrite",
         ]
+        assert "state" in query
+        assert request_with_session.session[auth.SESSION_OAUTH_STATE] == query["state"][0]
 
     def test_login_raises_when_client_id_is_missing(
         self,
@@ -185,7 +188,7 @@ class TestLogin:
         assert exc_info.value.detail == "AZURE_CLIENT_ID is not configured."
 
 
-    def test_login_stores_slack_user_id(
+    def test_login_stores_slack_user_id_from_auth_token(
         self,
         request_with_session: Request,
     ) -> None:
@@ -196,10 +199,32 @@ class TestLogin:
             azure_client_id="client-id-123",
         )
 
+        slack_auth_token = auth.create_slack_auth_token("U123")
         with patch("outlook_client_service.routers.auth.settings", settings_stub):
-            auth.login(request_with_session, slack_user_id="U123")
+            auth.login(request_with_session, slack_auth_token=slack_auth_token)
 
         assert request_with_session.session[auth.SESSION_SLACK_USER_ID] == "U123"
+
+
+    def test_login_raises_when_slack_auth_token_is_invalid(
+        self,
+        request_with_session: Request,
+    ) -> None:
+        """Raise when Slack auth token cannot be resolved."""
+        settings_stub = OAuthSettingsStub(
+            azure_authority="https://login.example.com",
+            azure_redirect_uri="http://localhost:8000/auth/callback",
+            azure_client_id="client-id-123",
+        )
+
+        with patch(
+            "outlook_client_service.routers.auth.settings",
+            settings_stub,
+        ), pytest.raises(HTTPException) as exc_info:
+            auth.login(request_with_session, slack_auth_token="invalid-token")
+
+        assert exc_info.value.status_code == HTTPStatus.BAD_REQUEST
+        assert exc_info.value.detail == "Invalid or expired Slack authentication token."
 
 
 class TestLogout:
@@ -468,6 +493,92 @@ class TestGetValidAccessToken:
         mock_refresh_access_token.assert_called_once_with(request_with_session)
 
 
+class TestGetValidAccessTokenForSlackUser:
+    """Group tests for Slack-linked access token refresh."""
+
+    def test_returns_existing_token_when_not_expiring(self) -> None:
+        """Return existing Slack-linked token when it is not near expiry."""
+        auth._slack_user_token_store["U123"] = {
+            "access_token": "existing-access",
+            "refresh_token": "existing-refresh",
+            "expires_at": FIXED_NOW + REFRESH_BUFFER_SECONDS + 1,
+        }
+
+        with patch("outlook_client_service.routers.auth.time.time", return_value=FIXED_NOW):
+            token = auth.get_valid_access_token_for_slack_user(
+                "U123",
+                refresh_buffer_seconds=REFRESH_BUFFER_SECONDS,
+            )
+
+        assert token == "existing-access"
+
+    @patch("outlook_client_service.routers.auth.requests.post")
+    def test_refreshes_expired_token(self, mock_post: Mock) -> None:
+        """Refresh an expired Slack-linked token and update the store."""
+
+        class DummyResponse:
+            """Provide a successful refresh response stub."""
+
+            status_code = HTTPStatus.OK
+
+            @staticmethod
+            def json() -> dict[str, object]:
+                return {
+                    "access_token": "new-access",
+                    "refresh_token": "new-refresh",
+                    "expires_in": EXPIRES_IN_LONG,
+                }
+
+        auth._slack_user_token_store["U123"] = {
+            "access_token": "old-access",
+            "refresh_token": "old-refresh",
+            "expires_at": FIXED_NOW,
+        }
+        mock_post.return_value = DummyResponse()
+
+        with patch("outlook_client_service.routers.auth.time.time", return_value=FIXED_NOW):
+            token = auth.get_valid_access_token_for_slack_user(
+                "U123",
+                refresh_buffer_seconds=REFRESH_BUFFER_SECONDS,
+            )
+
+        token_data = auth.get_slack_user_token_data("U123")
+        assert token == "new-access"
+        assert token_data is not None
+        assert token_data["access_token"] == "new-access"
+        assert token_data["refresh_token"] == "new-refresh"
+        assert token_data["expires_at"] == EXPECTED_EXPIRES_AT_LONG
+
+    @patch("outlook_client_service.routers.auth.requests.post")
+    def test_removes_binding_when_refresh_fails(self, mock_post: Mock) -> None:
+        """Remove Slack binding when token refresh fails."""
+
+        class DummyResponse:
+            """Provide a failing refresh response stub."""
+
+            status_code = HTTPStatus.BAD_REQUEST
+
+            @staticmethod
+            def json() -> dict[str, object]:
+                return {"error": "invalid_grant"}
+
+        auth._slack_user_token_store["U123"] = {
+            "access_token": "old-access",
+            "refresh_token": "old-refresh",
+            "expires_at": FIXED_NOW,
+        }
+        mock_post.return_value = DummyResponse()
+
+        token = auth.get_valid_access_token_for_slack_user("U123")
+
+        assert token is None
+        assert auth.get_slack_user_token_data("U123") is None
+
+    def test_returns_none_when_unlinked(self) -> None:
+        """Return None when Slack user has no linked token data."""
+        assert auth.get_valid_access_token_for_slack_user("missing-user") is None
+
+
 class TestCallback:
     """Group tests for the OAuth callback route."""
 
@@ -519,6 +630,7 @@ class TestCallback:
                 }
 
         request_with_session.session[auth.SESSION_SLACK_USER_ID] = "U123"
+        request_with_session.session[auth.SESSION_OAUTH_STATE] = "oauth-state-123"
         mock_post.return_value = DummyResponse()
 
         with patch(
@@ -528,6 +640,7 @@ class TestCallback:
             response = auth.callback(
                 request_with_session,
                 code="auth-code-123",
+                state="oauth-state-123",
             )
 
         assert response == {"message": "Authentication successful."}
@@ -562,13 +675,31 @@ class TestCallback:
             def json() -> dict[str, object]:
                 return {"error": "invalid_grant"}
 
+        request_with_session.session[auth.SESSION_OAUTH_STATE] = "oauth-state-123"
         mock_post.return_value = DummyResponse()
 
         with pytest.raises(HTTPException) as exc_info:
             auth.callback(
                 request_with_session,
                 code="bad-code",
+                state="oauth-state-123",
             )
 
         assert exc_info.value.status_code == HTTPStatus.BAD_REQUEST
         assert "invalid_grant" in str(exc_info.value.detail)
+    def test_callback_raises_when_state_is_invalid(
+        self,
+        request_with_session: Request,
+    ) -> None:
+        """Raise an HTTP exception when OAuth state is invalid."""
+        request_with_session.session[auth.SESSION_OAUTH_STATE] = "expected-state"
+
+        with pytest.raises(HTTPException) as exc_info:
+            auth.callback(
+                request_with_session,
+                code="auth-code-123",
+                state="wrong-state",
+            )
+
+        assert exc_info.value.status_code == HTTPStatus.BAD_REQUEST
+        assert exc_info.value.detail == "Invalid OAuth state"

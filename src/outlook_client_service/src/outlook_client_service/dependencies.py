@@ -9,7 +9,7 @@ from msgraph.graph_service_client import GraphServiceClient
 from outlook_client_impl.auth_manager import AuthManager
 from outlook_client_impl.outlook_impl import OutlookClient
 
-from outlook_client_service.routers.auth import SCOPES, get_slack_user_token_data, get_valid_access_token
+from outlook_client_service.routers.auth import SCOPES, get_valid_access_token, get_valid_access_token_for_slack_user
 
 
 def get_access_token(request: Request) -> str:
@@ -50,12 +50,8 @@ def get_calendar_client_from_access_token(
 
 def get_calendar_client_for_slack_user(slack_user_id: str) -> CalendarClient | None:
     """Return a calendar client for a linked Slack user, if available."""
-    token_data = get_slack_user_token_data(slack_user_id)
-    if token_data is None:
-        return None
-
-    access_token = token_data.get("access_token")
-    if not isinstance(access_token, str) or not access_token:
+    access_token = get_valid_access_token_for_slack_user(slack_user_id)
+    if access_token is None:
         return None
 
     return get_calendar_client_from_access_token(access_token)

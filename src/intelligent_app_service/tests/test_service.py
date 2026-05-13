@@ -72,6 +72,7 @@ def test_tool_create_event_calls_calendar() -> None:
 
     mock_event = MagicMock()
     mock_event.id = "evt-created-1"
+    mock_cal.list_events.return_value = []
     mock_cal.create_event.return_value = mock_event
 
     service.process_chat(message="test")
@@ -85,6 +86,26 @@ def test_tool_create_event_calls_calendar() -> None:
 
     mock_cal.create_event.assert_called_once()
     assert "evt-created-1" in result
+
+
+@pytest.mark.unit
+def test_tool_create_event_rejects_time_conflict() -> None:
+    """Verify create_outlook_event refuses to create conflicting events."""
+    service, mock_ai, mock_cal = _make_service()
+    existing_event = MagicMock()
+    mock_cal.list_events.return_value = [existing_event]
+
+    service.process_chat(message="test")
+    tools = _extract_tools(mock_ai)
+
+    result = tools["create_outlook_event"](
+        title="Team Sync",
+        start_iso_string="2026-04-23T14:00:00+00:00",
+        end_iso_string="2026-04-23T15:00:00+00:00",
+    )
+
+    mock_cal.create_event.assert_not_called()
+    assert "conflicts" in result
 
 
 @pytest.mark.unit
