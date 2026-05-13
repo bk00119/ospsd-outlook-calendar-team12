@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 
 import requests
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from outlook_client_service.config import settings
 
@@ -265,7 +265,7 @@ def callback(
     state: Annotated[str | None, Query()] = None,
     error: Annotated[str | None, Query()] = None,
     error_description: Annotated[str | None, Query()] = None,
-) -> dict[str, str]:
+) -> HTMLResponse:
     """Handle the OAuth callback from Microsoft."""
     if error:
         detail = error_description or error
@@ -293,4 +293,19 @@ def callback(
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=token_data)
     _store_token_data(request, token_data)
     bind_slack_user_to_current_session(request)
-    return {"message": "Authentication successful."}
+    return HTMLResponse(
+        content="""
+        <!doctype html>
+        <html lang="en">
+            <head>
+                <meta charset="utf-8">
+                <title>Authentication Successful</title>
+            </head>
+            <body style="font-family: system-ui, sans-serif; margin: 48px; line-height: 1.5;">
+                <h1>Authentication successful</h1>
+                <p>Your calendar is now connected. You can close this tab and return to Slack.</p>
+            </body>
+        </html>
+        """,
+        status_code=HTTPStatus.OK,
+    )
