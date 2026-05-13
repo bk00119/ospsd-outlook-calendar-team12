@@ -643,7 +643,8 @@ class TestCallback:
                 state="oauth-state-123",
             )
 
-        assert response == {"message": "Authentication successful."}
+        assert response.status_code == HTTPStatus.OK
+        assert b"Authentication successful" in response.body
         assert request_with_session.session["access_token"] == "new-access"
         assert request_with_session.session["refresh_token"] == "new-refresh"
         assert request_with_session.session["expires_in"] == EXPIRES_IN_LONG

@@ -1,5 +1,6 @@
 """Core orchestration service for intelligent app."""
 
+import re
 from datetime import datetime
 
 from calendar_client_api.event import EventPatch
@@ -7,6 +8,9 @@ from calendar_client_api.event import EventPatch
 from ai_client_api import AIClient, TextGenerationRequest
 from calendar_client_api import Client as CalendarClient
 from intelligent_app_service.prompts import get_system_context
+
+DESCRIPTION_MAX_LENGTH = 120
+DESCRIPTION_TRUNCATED_LENGTH = 117
 
 
 class IntelligentAppService:
@@ -26,6 +30,19 @@ class IntelligentAppService:
             nonlocal last_tool_result
             last_tool_result = message
             return message
+
+        def _format_description(description: str | None) -> str | None:
+            """Return a short plain-text description for Slack replies."""
+            if not description:
+                return None
+            text = re.sub(r"<[^>]+>", " ", description)
+            text = text.replace("&nbsp;", " ")
+            text = re.sub(r"\s+", " ", text).strip()
+            if not text:
+                return None
+            if len(text) > DESCRIPTION_MAX_LENGTH:
+                return f"{text[:DESCRIPTION_TRUNCATED_LENGTH]}..."
+            return text
 
         def create_outlook_event(
             title: str,
@@ -64,8 +81,9 @@ class IntelligentAppService:
             )
             if event.location:
                 summary += f" Location: {event.location}."
-            if event.description:
-                summary += f" Description: {event.description}"
+            description_text = _format_description(event.description)
+            if description_text:
+                summary += f" Description: {description_text}"
             return _record_tool_result(summary)
 
         def list_my_events(start_iso_string: str, end_iso_string: str) -> str:
@@ -90,8 +108,9 @@ class IntelligentAppService:
                 ]
                 if e.location:
                     parts.append(f"Location: {e.location}.")
-                if e.description:
-                    parts.append(f"Description: {e.description}")
+                description_text = _format_description(e.description)
+                if description_text:
+                    parts.append(f"Description: {description_text}")
                 lines.append(" ".join(parts))
             return _record_tool_result("\n".join(lines))
 
@@ -123,8 +142,9 @@ class IntelligentAppService:
             )
             if event.location:
                 details += f" Location: {event.location}."
-            if event.description:
-                details += f" Description: {event.description}"
+            description_text = _format_description(event.description)
+            if description_text:
+                details += f" Description: {description_text}"
             return _record_tool_result(details)
 
         def update_outlook_event(  # noqa: PLR0913
@@ -160,8 +180,9 @@ class IntelligentAppService:
             )
             if event.location:
                 summary += f" Location: {event.location}."
-            if event.description:
-                summary += f" Description: {event.description}"
+            description_text = _format_description(event.description)
+            if description_text:
+                summary += f" Description: {description_text}"
             return _record_tool_result(summary)
 
         # Combine context with the user's message
@@ -184,8 +205,8 @@ class IntelligentAppService:
         except Exception as exc:
             if last_tool_result is not None:
                 return (
-                    f"The calendar action appears to have succeeded, but the AI failed while "
-                    f"generating the final reply. Latest tool result: {last_tool_result}"
+                    "The calendar action succeeded, but I could not generate a polished reply. "
+                    f"Result: {last_tool_result}"
                 )
             err_msg = f"AI generation failed before any tool completed: {exc}"
             raise RuntimeError(err_msg) from exc

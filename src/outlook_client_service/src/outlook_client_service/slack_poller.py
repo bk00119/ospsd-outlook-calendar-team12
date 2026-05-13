@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from collections import deque
 from threading import Thread
@@ -17,7 +18,7 @@ from outlook_client_service.config import settings
 from outlook_client_service.dependencies import get_calendar_client_for_slack_user
 from outlook_client_service.routers.auth import SLACK_AUTH_QUERY_PARAM, create_slack_auth_token
 
-POLL_INTERVAL_SECONDS = 5
+POLL_INTERVAL_SECONDS = 3
 DEFAULT_LIMIT = 20
 MAX_PROCESSED_IDS = 1000
 
@@ -122,6 +123,13 @@ def _parse_message_timestamp(timestamp: str) -> float | None:
         return None
 
 
+def _format_slack_reply(text: str) -> str:
+    """Convert common Markdown output into Slack-friendly mrkdwn."""
+    formatted = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text)
+    formatted = re.sub(r"(?m)^\s*\*\s+", "• ", formatted)
+    return re.sub(r"(?m)^\s*-\s+", "• ", formatted)
+
+
 def _require_env(name: str, value: str | None) -> str:
     """Return an environment variable value or raise if missing."""
     if value:
@@ -214,7 +222,12 @@ def run_slack_poller() -> None:
 
                 logger.info("Sending Slack reply for message %s", msg.message_id)
                 sender_mention = f"<@{msg.sender}>"
-                final_reply = response if response.startswith(sender_mention) else f"{sender_mention} {response}"
+                response = _format_slack_reply(response)
+                final_reply = (
+                    response
+                    if response.startswith(sender_mention)
+                    else f"{sender_mention} {response}"
+                )
                 chat_client.send_message(
                     channel_id=channel_id,
                     text=final_reply,
