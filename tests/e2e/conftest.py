@@ -119,7 +119,11 @@ def pytest_configure(config: pytest.Config) -> None:
     """Register pytest markers used by the E2E test suite."""
     config.addinivalue_line(
         "markers",
-        "e2e: end-to-end tests that call real Microsoft Graph",
+        "e2e: end-to-end tests",
+    )
+    config.addinivalue_line(
+        "markers",
+        "graph_e2e: E2E tests that call real Microsoft Graph",
     )
     config.addinivalue_line(
         "markers",
@@ -202,19 +206,22 @@ def created_event_ids() -> list[str]:
 
 @pytest.fixture(autouse=True)
 def _cleanup_created_events(
-    client: Client,
-    created_event_ids: list[str],
-    e2e_config: E2EConfig,
+    request: pytest.FixtureRequest,
 ) -> Generator[None, None, None]:
-    """Best-effort cleanup for events created by E2E tests.
+    """Best-effort cleanup for events created by Graph E2E tests.
 
-    It deletes any event IDs recorded in `created_event_ids`.
-    Individual tests should append to this list as soon as
-    creation succeeds.
-
-    Cleanup should never fail the suite.
+    Black-box E2E tests should not construct a real calendar client.
     """
-    _ = e2e_config
+    if "graph_e2e" not in request.node.keywords:
+        yield
+        return
+
+    client = cast("Client", request.getfixturevalue("client"))
+    created_event_ids = cast(
+        "list[str]",
+        request.getfixturevalue("created_event_ids"),
+    )
+
     yield
 
     for event_id in reversed(created_event_ids):

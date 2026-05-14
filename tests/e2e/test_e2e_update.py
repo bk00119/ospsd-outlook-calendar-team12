@@ -22,7 +22,7 @@ import pytest
 
 from calendar_client_api import event
 
-pytestmark = [pytest.mark.e2e, pytest.mark.slow]
+pytestmark = [pytest.mark.e2e, pytest.mark.graph_e2e, pytest.mark.slow]
 
 TIMEOUT_MSG = "Timed out waiting for condition in retry_until()"
 MISSING_EVENT_ID_MSG = "Event id is missing or not a string"

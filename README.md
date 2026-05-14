@@ -125,19 +125,29 @@ OSPSD-OUTLOOK-CALENDAR-TEAM12/
     # Run integration tests
     uv run pytest -m integration
 
-    # Run end to end tests on local library
+    # Run black-box end-to-end tests (local subprocess)
+    # Starts the FastAPI app as a subprocess and validates user-visible HTTP behavior.
+    E2E=1 \
+    uv run pytest tests/e2e/test_service_blackbox.py --no-cov
+
+    # Run black-box end-to-end tests against the deployed service
+    E2E=1 \
+    E2E_BASE_URL=https://ospsd-outlook-calendar-team12.fly.dev \
+    uv run pytest tests/e2e/test_service_blackbox.py --no-cov
+
+    # Run Graph-backed end-to-end tests on the local library
     E2E=1 \
     E2E_CLIENT_FACTORY=local \
-    uv run pytest -m e2e --no-cov
-  
-    # Run end to end tests on remote service
-    # You can change the base url to the remote server address.
-    # Before running this, please login with your browser first, then copy and paste the session value to the variable below.
+    uv run pytest -m graph_e2e --no-cov
+
+    # Run Graph-backed end-to-end tests on the HTTP service adapter
+    # Before running this, authenticate once in your browser,
+    # then copy the session cookie value into the variable below.
     E2E=1 \
     E2E_CLIENT_FACTORY=service \
     OUTLOOK_CLIENT_SERVICE_BASE_URL=http://localhost:8000 \
     OUTLOOK_CLIENT_SERVICE_SESSION='...' \
-    uv run pytest -m e2e --no-cov
+    uv run pytest -m graph_e2e --no-cov
 
     # With coverage report
     uv run pytest --cov=src --cov-report=term-missing
