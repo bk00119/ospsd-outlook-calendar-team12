@@ -16,6 +16,7 @@ dev = [
     "pymdown-extensions>=10.16.1",
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
+    "pytest-httpserver>=1.1.0",
     "ruff>=0.12.7",
     "types-python-dateutil>=2.9.0.20250822",
     "types-requests>=2.32.4.20250611",
