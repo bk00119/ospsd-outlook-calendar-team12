@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 import pytest
 
-pytestmark = [pytest.mark.e2e, pytest.mark.slow]
+pytestmark = [pytest.mark.e2e, pytest.mark.graph_e2e, pytest.mark.slow]
 
 
 TIMEOUT_MSG = "Timed out waiting for condition in retry_until()"
