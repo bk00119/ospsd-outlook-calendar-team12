@@ -1,46 +1,30 @@
-"""Cross-vertical chat integration tests using the real shared chat API.
-
-The chat integration is verified end-to-end through the real chat router,
-real ``Team12SlackClient`` adapter, and the real ``chat_client_api`` registry.
-Only the slack-sdk transport layer is faked so the test does not need a live
-HTTP server — this keeps the test fast and stable in CI.
-"""
+"""Cross-vertical chat integration tests using the real shared chat API."""
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from http import HTTPStatus
-from typing import Any
+from typing import TYPE_CHECKING, Any
+from urllib.parse import parse_qs
 
 import pytest
 from chat_client_api.client import _ClientRegistry, register_client
 from fastapi.testclient import TestClient
+from slack_sdk import WebClient
+from werkzeug import Response
 
-
-class _FakeSlackWebClient:
-    """Minimal slack-sdk WebClient stand-in for integration assertions."""
-
-    def __init__(self) -> None:
-        """Record outbound calls so the test can assert on them."""
-        self.calls: list[dict[str, Any]] = []
-
-    def chat_postMessage(self, *, channel: str, text: str) -> dict[str, Any]:  # noqa: N802
-        """Record a chat.postMessage call and return a Slack-like success payload."""
-        self.calls.append({"channel": channel, "text": text})
-        return {
-            "ok": True,
-            "channel": channel,
-            "ts": "1770000000.000001",
-            "bot_id": "B_CALENDAR",
-            "message": {"text": text},
-        }
+if TYPE_CHECKING:
+    from pytest_httpserver import HTTPServer
+    from werkzeug.wrappers import Request
 
 
 @pytest.mark.integration
 def test_chat_route_uses_registered_shared_chat_client(
     monkeypatch: pytest.MonkeyPatch,
+    httpserver: HTTPServer,
 ) -> None:
-    """POST /chat/ should send the AI response through the registered chat client."""
+    """POST /chat/ should send the AI response through the Slack SDK HTTP path."""
     from outlook_client_service.config import settings
     from outlook_client_service.routers.chat import get_chat_intelligent_app
     from outlook_client_service.slack_chat_client import Team12SlackClient
@@ -62,10 +46,56 @@ def test_chat_route_uses_registered_shared_chat_client(
         "settings",
         replace(settings, enable_slack_poller=False),
     )
+    for proxy_env in (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ):
+        monkeypatch.delenv(proxy_env, raising=False)
 
-    fake_web_client = _FakeSlackWebClient()
+    recorded_requests: list[dict[str, Any]] = []
+
+    def handle_slack_post(request: Request) -> Response:
+        body_text = request.get_data(as_text=True)
+        try:
+            payload = json.loads(body_text)
+        except json.JSONDecodeError:
+            payload = {
+                key: values[0]
+                for key, values in parse_qs(body_text).items()
+            }
+        recorded_requests.append({"path": request.path, "json": payload})
+
+        response = {
+            "ok": True,
+            "channel": payload["channel"],
+            "ts": "1770000000.000001",
+            "bot_id": "B_CALENDAR",
+            "message": {"text": payload["text"]},
+        }
+        return Response(
+            json.dumps(response),
+            status=HTTPStatus.OK,
+            content_type="application/json",
+        )
+
+    httpserver.expect_request(
+        "/chat.postMessage",
+        method="POST",
+    ).respond_with_handler(handle_slack_post)
+
     register_client(
-        lambda: Team12SlackClient(token="xoxb-test", web_client=fake_web_client),
+        lambda: Team12SlackClient(
+            token="xoxb-test",
+            web_client=WebClient(
+                token="xoxb-test",
+                base_url=f"{httpserver.url_for('/')}",
+                timeout=2,
+            ),
+        ),
     )
 
     app = main.create_app()
@@ -83,6 +113,9 @@ def test_chat_route_uses_registered_shared_chat_client(
 
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {"response": "Created event: review at 2pm."}
-    assert fake_web_client.calls == [
-        {"channel": "C_INTEGRATION", "text": "Created event: review at 2pm."},
+    assert recorded_requests == [
+        {
+            "path": "/chat.postMessage",
+            "json": {"channel": "C_INTEGRATION", "text": "Created event: review at 2pm."},
+        },
     ]
