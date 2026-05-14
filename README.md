@@ -139,6 +139,13 @@ OSPSD-OUTLOOK-CALENDAR-TEAM12/
     OUTLOOK_CLIENT_SERVICE_SESSION='...' \
     uv run pytest -m e2e --no-cov
 
+    # Same, against the deployed Fly.io instance
+    E2E=1 \
+    E2E_CLIENT_FACTORY=service \
+    OUTLOOK_CLIENT_SERVICE_BASE_URL=https://ospsd-outlook-calendar-team12.fly.dev \
+    OUTLOOK_CLIENT_SERVICE_SESSION='...' \
+    uv run pytest -m e2e --no-cov
+
     # With coverage report
     uv run pytest --cov=src --cov-report=term-missing
     ```
@@ -187,21 +194,27 @@ auto-stop/auto-start policy. `flyctl deploy --config fly.toml` from a clean
 state provisions and rolls the app, making the file the single source of
 truth for Fly.io infrastructure.
 
-### Telemetry (OpenTelemetry)
+### Telemetry (OpenTelemetry → Honeycomb)
 
-The service is instrumented with OpenTelemetry for distributed tracing and
-structured JSON logging via `structlog`. Traces are shipped over OTLP/HTTP to
-Grafana Cloud (or any OTLP-compatible backend) when
-`OTEL_EXPORTER_OTLP_ENDPOINT` is set; otherwise they fall back to the console
-exporter for local development.
+The service is instrumented with OpenTelemetry for distributed tracing,
+auto-emitted HTTP server metrics via `FastAPIInstrumentor`, and structured
+JSON logging via `structlog`. Spans and metrics are shipped over OTLP/HTTP
+to [Honeycomb](https://www.honeycomb.io) when `OTEL_EXPORTER_OTLP_ENDPOINT`
+is set; otherwise they fall back to the console exporter for local
+development.
+
+- **Live dashboard**: <https://ui.honeycomb.io/ospds/environments/test/board/zfvxVA8cFfS>
+  - Panel 1 — **P95 latency by route** (`P95(duration_ms)` GROUP BY `http.route`)
+  - Panel 2 — **Request count by status code** (`COUNT` GROUP BY `http.status_code`)
 
 Relevant env vars:
 
 | Variable | Description |
 |----------|-------------|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP endpoint (e.g. Grafana Cloud tempo URL) |
-| `OTEL_EXPORTER_OTLP_HEADERS` | `Authorization=Basic <base64>` header for the backend |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP endpoint (e.g. `https://api.honeycomb.io`) |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Auth header (e.g. `x-honeycomb-team=<api-key>`) |
 | `APP_ENV` | `prod` / `dev` — tagged on every span as `deployment.environment` |
+| `APP_VERSION` | tagged on every span as `service.version` |
 
 ## Continuous Integration & Deployment
 

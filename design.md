@@ -281,18 +281,24 @@ Neither the Dockerfile nor `fly.toml` ever sees a secret value — they only see
 
 The job is filtered to `hw-3` and the `jaik/hw3-deployment-telemetry` working branch, so feature branches run the test suite but never push a deploy. After HW3 merges to `main`, the `full_integration` workflow takes over and also deploys.
 
-### 6.5 Observability — OpenTelemetry to Grafana Cloud
+### 6.5 Observability — OpenTelemetry to Honeycomb
 
-[`telemetry.py`](src/outlook_client_service/src/outlook_client_service/telemetry.py) wires up two parallel signal pipelines:
+[`telemetry.py`](src/outlook_client_service/src/outlook_client_service/telemetry.py) wires up three parallel signal pipelines, all sharing one `Resource` tagged with `service.name = "outlook-client-service"`, `service.version`, and `deployment.environment`.
 
-**Tracing.** A `TracerProvider` is built with a `Resource` tagged `service.name = "outlook-client-service"`, `service.version`, and `deployment.environment`. A `BatchSpanProcessor` ships spans over OTLP/HTTP to whatever endpoint `OTEL_EXPORTER_OTLP_ENDPOINT` points at (Grafana Cloud Tempo in prod). When the env var is absent the processor falls back to `ConsoleSpanExporter`, which is what local `uv run uvicorn …` runs see.
+**Tracing.** A `TracerProvider` plus `BatchSpanProcessor` ships spans over OTLP/HTTP to whatever endpoint `OTEL_EXPORTER_OTLP_ENDPOINT` points at (Honeycomb in prod). When the env var is absent the processor falls back to `ConsoleSpanExporter`, which is what local `uv run uvicorn …` runs see.
+
+**Metrics.** A `MeterProvider` plus `PeriodicExportingMetricReader` ships metric snapshots every 15 seconds via the OTLP HTTP metric exporter to the same backend. This second pipeline is what makes `FastAPIInstrumentor` emit HTTP server histograms (request duration) and counters (request total) directly as metrics, in addition to span data. Falls back to `ConsoleMetricExporter` locally.
 
 **Auto-instrumentation.** Two libraries hook into the request lifecycle without per-route code:
 
-- `FastAPIInstrumentor.instrument_app(app)` — every public HTTP request emits a span tagged with `http.route`, `http.method`, `http.status_code`, and end-to-end latency. This satisfies the rubric's "request latency labelled by route/method/status" + "success/failure rate" items without per-handler instrumentation.
-- `RequestsInstrumentor().instrument()` — outbound calls to Microsoft Graph and Slack also emit child spans, so a slow downstream is visible in the trace tree rather than just inflating the parent latency.
+- `FastAPIInstrumentor.instrument_app(app, tracer_provider=…, meter_provider=…)` — every public HTTP request emits a span AND a metric data point tagged with `http.route`, `http.method`, `http.status_code`, and end-to-end latency. This satisfies the rubric's "request latency labelled by route/method/status" + "success/failure rate" items without per-handler instrumentation.
+- `RequestsInstrumentor().instrument(...)` — outbound calls to Microsoft Graph and Slack also emit child spans, so a slow downstream is visible in the trace tree rather than just inflating the parent latency.
 
 **Logs.** `structlog` is configured to emit JSON-line records via `JSONRenderer`, with `add_log_level` and an ISO timestamper. Fly's log shipper picks these up as structured logs, so the same trace IDs are correlatable across logs and spans.
+
+**Why Honeycomb.** An earlier revision of HW3 shipped to Grafana Cloud, but the chosen stack hit a routing issue where the OTLP gateway returned `502 Bad Gateway` for actual data despite accepting auth. We swapped to Honeycomb to remove that variable: same OTel SDK, two-secret config (`OTEL_EXPORTER_OTLP_ENDPOINT="https://api.honeycomb.io"` + `OTEL_EXPORTER_OTLP_HEADERS="x-honeycomb-team=<key>"`), traces-first dashboard model that Honeycomb is purpose-built for. The dashboard board ID `zfvxVA8cFfS` in the `ospds/test` environment renders the rubric panels — P95 latency by route and request count by status code — straight off the span data.
+
+**Domain counter — `slack_messages_processed`.** In addition to the auto-emitted HTTP-server signals, the Slack poller emits a custom counter labelled by `outcome` (`ok`, `ai_error`, `auth_required`, `no_text`). This is the metric that answers Tingran's "what does the deployed poller actually do?" — it shows how many user mentions made it through each branch of `_handle_message` over time, and is queryable in Honeycomb as `COUNT slack_messages_processed GROUP BY outcome`. An equivalent `ai_tool_calls` counter was scoped but not wired, since `intelligent_app_service` would have to import from `outlook_client_service.telemetry` — a circular dependency. AI-tool latency and outcome are still observable via the spans the FastAPI/Requests instrumentors emit around each tool call.
 
 ### 6.6 Slack Cross-Vertical Integration
 
