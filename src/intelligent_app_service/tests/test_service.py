@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 from intelligent_app_service.service import IntelligentAppService
 
-EXPECTED_TOOL_COUNT = 5
+EXPECTED_TOOL_COUNT = 4
 
 
 def _make_service(
@@ -156,34 +156,15 @@ def test_tool_list_events_empty_calendar() -> None:
 
 
 @pytest.mark.unit
-def test_tool_delete_event_calls_calendar() -> None:
-    """Verify delete_outlook_event delegates to calendar client."""
+def test_delete_event_tool_is_not_exposed_to_ai() -> None:
+    """Verify destructive calendar deletion is not exposed as an AI tool."""
     service, mock_ai, mock_cal = _make_service()
 
     service.process_chat(message="test")
     tools = _extract_tools(mock_ai)
 
-    result = tools["delete_outlook_event"](
-        event_id="evt-delete-me",
-        confirmation="evt-delete-me",
-    )
-
-    mock_cal.delete_event.assert_called_once_with("evt-delete-me")
-    assert "evt-delete-me" in result
-
-
-@pytest.mark.unit
-def test_tool_delete_event_requires_confirmation() -> None:
-    """Verify delete_outlook_event refuses destructive deletes without confirmation."""
-    service, mock_ai, mock_cal = _make_service()
-
-    service.process_chat(message="test")
-    tools = _extract_tools(mock_ai)
-
-    result = tools["delete_outlook_event"](event_id="evt-delete-me")
-
+    assert "delete_outlook_event" not in tools
     mock_cal.delete_event.assert_not_called()
-    assert "requires explicit confirmation" in result
 
 
 @pytest.mark.unit

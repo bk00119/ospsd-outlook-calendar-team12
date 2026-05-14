@@ -119,23 +119,6 @@ class IntelligentAppService:
                 lines.append(" ".join(parts))
             return _record_tool_result("\n".join(lines))
 
-        def delete_outlook_event(event_id: str, confirmation: str | None = None) -> str:
-            """Delete a calendar event by its ID.
-
-            Args:
-                event_id: The unique ID string of the event to delete.
-                confirmation: Must exactly match event_id. This prevents accidental destructive deletes from
-                    a misclassified prompt; only provide it after the user explicitly confirms deletion.
-
-            """
-            if confirmation != event_id:
-                return _record_tool_result(
-                    "Deletion requires explicit confirmation. Ask the user to confirm the exact event ID, "
-                    "then call delete_outlook_event with confirmation equal to that event ID.",
-                )
-            self._calendar.delete_event(event_id)
-            return _record_tool_result(f"Deleted event {event_id}.")
-
         def get_outlook_event(event_id: str) -> str:
             """Retrieve details of a specific calendar event.
 
@@ -215,7 +198,6 @@ class IntelligentAppService:
             tools=[
                 create_outlook_event,
                 list_my_events,
-                delete_outlook_event,
                 get_outlook_event,
                 update_outlook_event,
             ],
