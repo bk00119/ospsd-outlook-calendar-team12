@@ -6,7 +6,7 @@ import json
 from dataclasses import replace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from threading import Thread
+from threading import Event, Thread
 from typing import Any, ClassVar
 from urllib.parse import parse_qs
 
@@ -54,6 +54,13 @@ class _SlackStubHandler(BaseHTTPRequestHandler):
         """Silence default HTTP server logging during tests."""
 
 
+class _SlackStubServer(ThreadingHTTPServer):
+    """Threaded HTTP stub that does not block process exit in CI."""
+
+    daemon_threads = True
+    allow_reuse_address = True
+
+
 @pytest.mark.integration
 def test_chat_route_uses_registered_shared_chat_client_against_http_stub(
     free_tcp_port: int,
@@ -81,14 +88,30 @@ def test_chat_route_uses_registered_shared_chat_client_against_http_stub(
         "settings",
         replace(settings, enable_slack_poller=False),
     )
+    for proxy_env in (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ):
+        monkeypatch.delenv(proxy_env, raising=False)
     _SlackStubHandler.recorded_requests = []
-    server = ThreadingHTTPServer(("127.0.0.1", free_tcp_port), _SlackStubHandler)
+    server = _SlackStubServer(("127.0.0.1", free_tcp_port), _SlackStubHandler)
+    server_ready = Event()
+
+    def serve_stub() -> None:
+        server_ready.set()
+        server.serve_forever(poll_interval=0.05)
+
     server_thread = Thread(
-        target=server.serve_forever,
+        target=serve_stub,
         name="slack-stub-http-server",
         daemon=True,
     )
     server_thread.start()
+    assert server_ready.wait(timeout=2)
     register_client(
         lambda: Team12SlackClient(
             token="xoxb-test",
@@ -116,6 +139,7 @@ def test_chat_route_uses_registered_shared_chat_client_against_http_stub(
     finally:
         server.shutdown()
         server.server_close()
+        server_thread.join(timeout=2)
 
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {"response": "Created event: review at 2pm."}
