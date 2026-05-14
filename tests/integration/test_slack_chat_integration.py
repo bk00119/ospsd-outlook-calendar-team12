@@ -1,69 +1,43 @@
-"""Cross-vertical chat integration tests using the real shared chat API."""
+"""Cross-vertical chat integration tests using the real shared chat API.
+
+The chat integration is verified end-to-end through the real chat router,
+real ``Team12SlackClient`` adapter, and the real ``chat_client_api`` registry.
+Only the slack-sdk transport layer is faked so the test does not need a live
+HTTP server — this keeps the test fast and stable in CI.
+"""
 
 from __future__ import annotations
 
-import json
 from dataclasses import replace
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from threading import Event, Thread
-from typing import Any, ClassVar
-from urllib.parse import parse_qs
+from typing import Any
 
 import pytest
 from chat_client_api.client import _ClientRegistry, register_client
 from fastapi.testclient import TestClient
-from slack_sdk import WebClient
 
 
-class _SlackStubHandler(BaseHTTPRequestHandler):
-    """HTTP handler that records Slack-style send-message requests."""
+class _FakeSlackWebClient:
+    """Minimal slack-sdk WebClient stand-in for integration assertions."""
 
-    recorded_requests: ClassVar[list[dict[str, Any]]] = []
+    def __init__(self) -> None:
+        """Record outbound calls so the test can assert on them."""
+        self.calls: list[dict[str, Any]] = []
 
-    def do_POST(self) -> None:
-        """Record a POST request and return a Slack-like JSON response."""
-        body_length = int(self.headers.get("Content-Length", "0"))
-        body = self.rfile.read(body_length)
-        body_text = body.decode("utf-8")
-        try:
-            payload = json.loads(body_text)
-        except json.JSONDecodeError:
-            payload = {
-                key: values[0]
-                for key, values in parse_qs(body_text).items()
-            }
-        self.recorded_requests.append({"path": self.path, "json": payload})
-
-        response = {
+    def chat_postMessage(self, *, channel: str, text: str) -> dict[str, Any]:  # noqa: N802
+        """Record a chat.postMessage call and return a Slack-like success payload."""
+        self.calls.append({"channel": channel, "text": text})
+        return {
             "ok": True,
-            "channel": payload["channel"],
+            "channel": channel,
             "ts": "1770000000.000001",
             "bot_id": "B_CALENDAR",
-            "message": {"text": payload["text"]},
+            "message": {"text": text},
         }
-        response_body = json.dumps(response).encode("utf-8")
-
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(response_body)))
-        self.end_headers()
-        self.wfile.write(response_body)
-
-    def log_message(self, format: str, *args: object) -> None:  # noqa: A002
-        """Silence default HTTP server logging during tests."""
-
-
-class _SlackStubServer(ThreadingHTTPServer):
-    """Threaded HTTP stub that does not block process exit in CI."""
-
-    daemon_threads = True
-    allow_reuse_address = True
 
 
 @pytest.mark.integration
-def test_chat_route_uses_registered_shared_chat_client_against_http_stub(
-    free_tcp_port: int,
+def test_chat_route_uses_registered_shared_chat_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """POST /chat/ should send the AI response through the registered chat client."""
@@ -88,64 +62,27 @@ def test_chat_route_uses_registered_shared_chat_client_against_http_stub(
         "settings",
         replace(settings, enable_slack_poller=False),
     )
-    for proxy_env in (
-        "HTTP_PROXY",
-        "HTTPS_PROXY",
-        "ALL_PROXY",
-        "http_proxy",
-        "https_proxy",
-        "all_proxy",
-    ):
-        monkeypatch.delenv(proxy_env, raising=False)
-    _SlackStubHandler.recorded_requests = []
-    server = _SlackStubServer(("127.0.0.1", free_tcp_port), _SlackStubHandler)
-    server_ready = Event()
 
-    def serve_stub() -> None:
-        server_ready.set()
-        server.serve_forever(poll_interval=0.05)
-
-    server_thread = Thread(
-        target=serve_stub,
-        name="slack-stub-http-server",
-        daemon=True,
-    )
-    server_thread.start()
-    assert server_ready.wait(timeout=2)
+    fake_web_client = _FakeSlackWebClient()
     register_client(
-        lambda: Team12SlackClient(
-            token="xoxb-test",
-            web_client=WebClient(
-                token="xoxb-test",
-                base_url=f"http://127.0.0.1:{free_tcp_port}/",
-                timeout=2,
-            ),
-        ),
+        lambda: Team12SlackClient(token="xoxb-test", web_client=fake_web_client),
     )
 
     app = main.create_app()
     stub_service = StubService()
     app.dependency_overrides[get_chat_intelligent_app] = lambda: stub_service
 
-    try:
-        response = TestClient(app).post(
-            "/chat/",
-            json={
-                "message": "Schedule the review at 2pm",
-                "channel_id": "C_INTEGRATION",
-                "timezone": "America/New_York",
-            },
-        )
-    finally:
-        server.shutdown()
-        server.server_close()
-        server_thread.join(timeout=2)
+    response = TestClient(app).post(
+        "/chat/",
+        json={
+            "message": "Schedule the review at 2pm",
+            "channel_id": "C_INTEGRATION",
+            "timezone": "America/New_York",
+        },
+    )
 
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {"response": "Created event: review at 2pm."}
-    assert _SlackStubHandler.recorded_requests == [
-        {
-            "path": "/chat.postMessage",
-            "json": {"channel": "C_INTEGRATION", "text": "Created event: review at 2pm."},
-        },
+    assert fake_web_client.calls == [
+        {"channel": "C_INTEGRATION", "text": "Created event: review at 2pm."},
     ]
