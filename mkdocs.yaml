@@ -24,6 +24,9 @@ nav:
       - Outlook Implementation: api/outlook_client_impl.md
       - Service: api/outlook_client_service.md
       - Service Client Adapter: api/outlook_service_client_adapter.md
+      - AI Client API: api/ai_client_api.md
+      - Gemini AI Client Implementation: api/gemini_ai_client_impl.md
+      - Intelligent App Service: api/intelligent_app_service.md
   - Guides:
       - Testing: testing.md
       - CircleCI Setup: circleci-setup.md
@@ -42,6 +45,9 @@ plugins:
             - src/outlook_client_impl/src
             - src/outlook_client_service/src
             - src/outlook_service_client_adapter/src
+            - src/ai_client_api/src
+            - src/gemini_ai_client_impl/src
+            - src/intelligent_app_service/src
           options:
             show_source: false
             docstring_section_style: spacy

@@ -233,9 +233,9 @@ The adapter is verified as a correct implementation of the `Client` ABC through 
 1. **Static type checking**: `mypy --strict` verifies that `ServiceClientAdapter` implements all abstract methods with compatible signatures. Any missing or mistyped method is caught at analysis time.
 2. **Integration tests**: The DI wiring test imports the adapter package, which triggers `register()`, then asserts that `calendar_client_api.get_client()` returns a `ServiceClientAdapter` instance. Adapter unit tests verify that each method delegates correctly and maps responses into `Event`-compatible objects.
 
-## 6. HW3: Deployment, IaC, and Telemetry
+## 6. AI, Cross-Vertical Chat, Deployment, IaC, and Telemetry
 
-HW3 adds three new components (`ai_client_api`, `gemini_ai_client_impl`, `intelligent_app_service`) and a cross-vertical Slack integration, and puts the whole system into a public cloud. The deployment-layer design decisions are below.
+This phase adds three new components (`ai_client_api`, `gemini_ai_client_impl`, `intelligent_app_service`) and a cross-vertical Slack integration, and puts the whole system into a public cloud. Each design area is covered below.
 
 ### 6.1 Hosting Choice — Fly.io
 
@@ -300,13 +300,30 @@ The job is filtered to `hw-3` and the `jaik/hw3-deployment-telemetry` working br
 
 **Domain counter — `slack_messages_processed`.** In addition to the auto-emitted HTTP-server signals, the Slack poller emits a custom counter labelled by `outcome` (`ok`, `ai_error`, `auth_required`, `no_text`). This is the metric that answers Tingran's "what does the deployed poller actually do?" — it shows how many user mentions made it through each branch of `_handle_message` over time, and is queryable in Honeycomb as `COUNT slack_messages_processed GROUP BY outcome`. An equivalent `ai_tool_calls` counter was scoped but not wired, since `intelligent_app_service` would have to import from `outlook_client_service.telemetry` — a circular dependency. AI-tool latency and outcome are still observable via the spans the FastAPI/Requests instrumentors emit around each tool call.
 
-### 6.6 Slack Cross-Vertical Integration
+### 6.6 AI Integration
 
-The HW3 chat-vertical integration runs as a background polling thread launched from the FastAPI `lifespan` ([`main.py`](src/outlook_client_service/src/outlook_client_service/main.py)):
+The AI layer follows the same interface / implementation pattern as the calendar client: a provider-agnostic `AIClient` ABC ([`ai_client_api/`](src/ai_client_api/)) describes text and structured generation calls; a Gemini-backed concrete implementation ([`gemini_ai_client_impl/`](src/gemini_ai_client_impl/)) wraps the official `google-genai` SDK. Application code depends only on `AIClient`, so swapping Gemini for OpenAI / Anthropic only changes the registered implementation. Credentials (`GEMINI_API_KEY`) are loaded from environment variables at startup — never hardcoded, never logged.
+
+**Orchestration via `IntelligentAppService`.** [`intelligent_app_service`](src/intelligent_app_service/) is the chat-facing orchestration layer. `process_chat(message, user_timezone)` builds a typed system prompt (including the user's timezone), constructs a `TextGenerationRequest` annotated with **tool definitions** corresponding to real calendar actions, and runs the tool-calling loop against the registered `AIClient`. Tools are typed Python callables exposed to the model:
+
+| Tool | Purpose | Safety guards |
+|---|---|---|
+| `create_outlook_event(title, start_iso_string, end_iso_string, location, description)` | Schedule a new event | Refuses if `list_events(start, end)` returns any overlapping event |
+| `list_my_events(start_iso_string, end_iso_string)` | Summarize a time range | — |
+| `get_outlook_event(event_id)` | Fetch event details | Maps `NotFound` to a user-facing error string |
+| `update_outlook_event(event_id, …)` | Modify an existing event | If time range changes, refuses on conflict (ignoring the event being updated) |
+
+**`delete_event` is intentionally not exposed to the model.** The hardening was driven by TA review ("destructive op with no undo. Misclassified prompt could nuke real events"). A deletion still exists on the underlying `CalendarClient`, so it can be wired into an explicit confirmation flow in the future — but it cannot fire from a free-form AI prompt.
+
+**Conflict checks happen in code, not in the prompt.** `_has_conflict(starts_at, ends_at, ignore_event_id=…)` is a real Python guard inside the tool implementation. Relying on prompt rules to check conflicts (e.g. "tell the model not to overbook") is fragile under misclassification; the code path is the source of truth.
+
+### 6.7 Slack Cross-Vertical Integration
+
+The HW3 chat-vertical integration runs as an opt-in background polling thread launched from the FastAPI `lifespan` ([`main.py`](src/outlook_client_service/src/outlook_client_service/main.py)) **only when `ENABLE_SLACK_POLLER=true`**. The default is `false`, so a typical web worker does not poll. This prevents duplicate replies under multi-worker / HA setups (TA review feedback) and matches the rubric's "every worker polls" concern — production deployments enable the poller on exactly one machine via the env var.
 
 ```
 FastAPI startup
-  └─ lifespan() → start_slack_poller_background()
+  └─ lifespan() → if settings.enable_slack_poller: start_slack_poller_background()
        └─ Thread(name="slack-poller", daemon=True)
             └─ while True: chat_client.get_messages(channel) → filter → AI → reply
 ```
@@ -314,19 +331,18 @@ FastAPI startup
 For each new message in `SLACK_TEST_CHANNEL_ID` that @mentions the bot, the poller:
 
 1. Strips the mention prefix.
-2. Looks up the sender's Outlook OAuth token via `get_calendar_client_for_slack_user(slack_user_id)`.
-3. If unlinked, replies with an auth link (`/auth/login?slack_user_id=…`) that binds the Outlook session to the Slack user on callback.
-4. If linked, hands the message + user timezone to `IntelligentAppService.process_chat`, which drives the Gemini tool-calling loop against `create_outlook_event`, `list_my_events`, etc.
-5. Posts the model's reply back to the channel via the shared `chat_client_api`.
+2. Looks up the sender's Outlook OAuth token via the in-process `_slack_user_token_store`.
+3. If unlinked, replies with an auth link `/auth/login?slack_auth_token=<opaque-token>` where the token is a server-issued, one-time-use, opaque value generated by `create_slack_auth_token(slack_user_id)`. The token resolves back to the Slack user ID server-side on callback — the raw `slack_user_id` is **never trusted from URL parameters**, eliminating the CSRF/spoofing path called out in TA review.
+4. If linked, hands the message + user timezone to `IntelligentAppService.process_chat`, which drives the Gemini tool-calling loop against `create_outlook_event`, `list_my_events`, `get_outlook_event`, `update_outlook_event`. (`delete_event` is intentionally not exposed to the model.)
+5. Posts the model's reply back to the channel via the registered `ChatClient` from `chat_client_api.get_client()`.
 
-The chat client is resolved through the cross-vertical `chat_client_api.get_client()` factory — `slack_client_impl` is imported solely to trigger its `register()` side-effect, mirroring the HW1 DI pattern. Swapping Slack out for a different chat provider (e.g. Discord) only requires registering a different implementation under the same ABC.
+**Concrete implementation — local `Team12SlackClient` adapter.** We pull `chat-client-api` (the shared ABC) from the canonical [`HarshithKoriRaj/Shared-API`](https://github.com/HarshithKoriRaj/Shared-API) repo. The chat vertical's published `slack-client-impl` package is **not** pulled as a dependency because it internally declares `chat-client-api` resolved to a different Git URL (`CS-GY-9223-Open-Source`), and `uv` refuses to resolve two URLs for the same package name. Instead, `Team12SlackClient` ([`slack_chat_client.py`](src/outlook_client_service/src/outlook_client_service/slack_chat_client.py)) is a ~240-line adapter that wraps the official `slack-sdk` `WebClient` and implements the shared `ChatClient` ABC. It registers itself via `register_client(create_slack_chat_client)` at module import time, so any code calling `chat_client_api.get_client()` gets a working `ChatClient` back without explicitly knowing about Slack.
 
-**Known caveats** (called out in TA review, deferred for the final sprint):
+**Swappability.** Application code (chat router, slack poller) depends only on the `ChatClient` ABC. Swapping Slack for Discord / Teams / Telegram only requires registering a different `ChatClient` implementation under the same ABC — the consumer code does not change. A runtime `CHAT_CLIENT_IMPL_MODULE` env var is also supported as a fallback lookup path when no impl has been registered yet, leaving the deployment side a single env-var change for swap.
 
-- The Slack user → Outlook token mapping is held in an in-memory dict and is lost on process restart. A persistent store is the next iteration.
-- Auto-starting the poller from `lifespan` means every Fly machine in an HA fleet would poll the same channel. The standalone `run_slack_poller.py` entry point exists as the production deployment path; today's single-machine Fly setup makes this a non-issue but it will need an env flag before HA.
+**Session secret hardening.** Production now requires `SESSION_SECRET_KEY` to be explicitly configured (`config._load_session_secret_key` refuses to start when `APP_ENV=prod` and the key is unset). The dev/local fallback generates a random per-process key so testing keeps working without the env var.
 
-### 6.7 Bug Fix from TA Review — `list_events` Partial-Overlap
+### 6.8 Bug Fix from TA Review — `list_events` Partial-Overlap
 
 TA review flagged that `OutlookClient.list_events` used strict-containment filtering, which silently dropped any event that started before the window or ended after it. A 1:30-2:30 PM meeting was invisible to a 2-3 PM query, which meant the AI's "is the calendar free?" prompt could not catch real conflicts.
 
