@@ -1,7 +1,7 @@
 # Team 12: Outlook (Calendar)
 
 [![Coverage](https://img.shields.io/badge/coverage-85%2B%25-brightgreen)](https://circleci.com/gh/bk00119/ospsd-outlook-calendar-team12)
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
 ## Team Members
@@ -24,6 +24,38 @@ The project emphasizes independence between client interface (a contract) and th
 
 Implementation is injected into the contract at runtime through Dependency Injection
 
+## AI and Cross-Vertical Chat Integration
+
+This service combines three modular layers: the Outlook calendar client (our vertical), an AI orchestration layer, and a Slack chat integration (cross-vertical). Each layer talks only to interfaces defined elsewhere, so providers are swappable without touching the consumer code.
+
+### AI Integration
+
+`IntelligentAppService` (in `src/intelligent_app_service/`) orchestrates a Google Gemini LLM with **tool calling** enabled. Four typed calendar tools are exposed to the model:
+
+| Tool | Behavior |
+|---|---|
+| `create_outlook_event` | Creates an event; refuses if the requested window conflicts with an existing event |
+| `list_my_events` | Returns a formatted natural-language summary of events in a time range |
+| `get_outlook_event` | Returns details of a specific event |
+| `update_outlook_event` | Updates an event; refuses if a time change would conflict with another event |
+
+The destructive `delete_event` tool is **intentionally not exposed** to the model to prevent accidental data loss from misclassified prompts. AI provider credentials are loaded from `GEMINI_API_KEY` at startup — never hardcoded.
+
+### Cross-Vertical Chat Integration
+
+The service depends on the chat vertical's shared `chat-client-api` ABC, pulled from [`HarshithKoriRaj/Shared-API`](https://github.com/HarshithKoriRaj/Shared-API). A local `Team12SlackClient` adapter (`src/outlook_client_service/.../slack_chat_client.py`) wraps `slack-sdk` and implements the ABC, registering itself with `register_client(...)` on import.
+
+Application code only imports the `ChatClient` ABC — Slack-specific code is isolated to the adapter, satisfying the rubric's swappability requirement.
+
+**Two trigger paths feed user messages into the AI:**
+
+- **HTTP `/chat`**: A POST endpoint accepting `{message, channel_id, timezone}`. The AI response is forwarded to the requested Slack channel via the registered chat client.
+- **Slack poller** (`slack_poller.py`): Opt-in background loop gated behind `ENABLE_SLACK_POLLER=true`. Watches a Slack channel for bot mentions and routes them through the same `IntelligentAppService.process_chat()` path.
+
+### Why a Local Slack Adapter (instead of pulling Team 9's `slack-client-impl`)
+
+The Slack team's published `slack-client-impl` package internally declares its `chat-client-api` dependency pointing at `HarshithKoriRaj/CS-GY-9223-Open-Source` (their working repo). Our project pulls `chat-client-api` from the canonical `HarshithKoriRaj/Shared-API` repo, which causes `uv` to refuse resolution due to two different Git URLs for the same package name. The local adapter sidesteps this cleanly while still depending only on the shared ABC.
+
 ### Core Components
 - `calendar_client_api`: Defines the abstract base class, `Client`, which is the contract of what the interface of a calendar client can do
 - `outlook_client_impl`: Implements the `OutlookClient` class - a concrete implementation of the Calendar Client that uses Microsoft Graph to perform contract actions on Outlook Calendar
@@ -33,20 +65,35 @@ Implementation is injected into the contract at runtime through Dependency Injec
 - `outlook_client_service_api_client`: Auto-generated Python client created from the service's OpenAPI spec
 - `outlook_service_client_adapter`: Adapter that implements the `Client` ABC by delegating to the generated client, enabling location-transparent usage
 
+### AI Components
+- `ai_client_api`: Abstract `AIClient` interface for text-generation and structured-generation requests; framework-free and provider-agnostic
+- `gemini_ai_client_impl`: Concrete implementation backed by Google Gemini via the official `google-genai` SDK
+- `intelligent_app_service`: AI orchestration layer that exposes calendar tools to the model and routes natural-language messages through the registered `AIClient`
+
+### Cross-Vertical Chat Components
+- `chat-client-api` (external dep from [HarshithKoriRaj/Shared-API](https://github.com/HarshithKoriRaj/Shared-API)): The shared `ChatClient` ABC agreed upon by the chat vertical
+- `outlook_client_service/slack_chat_client.py`: Local `Team12SlackClient` adapter that wraps the official `slack-sdk` and implements `ChatClient`. Registers itself via `register_client(...)` on import
+- `outlook_client_service/slack_poller.py`: Opt-in background poller (gated by `ENABLE_SLACK_POLLER`) that forwards Slack bot mentions through `IntelligentAppService.process_chat()`
+
 ### Project Structure
 ```
 OSPSD-OUTLOOK-CALENDAR-TEAM12/
 ├── src/
-│   ├── calendar_client_api/              # Abstract client interface (ABC)
+│   ├── calendar_client_api/              # Calendar ABC (our vertical's shared interface)
 │   ├── outlook_client_impl/              # Microsoft Graph implementation
-│   ├── outlook_client_service/           # FastAPI service
+│   ├── outlook_client_service/           # FastAPI service (auth, events, /chat, slack_poller)
 │   ├── outlook_client_service_api_client/# Auto-generated HTTP client
-│   └── outlook_service_client_adapter/   # Adapter back to Client ABC
+│   ├── outlook_service_client_adapter/   # Adapter back to Client ABC
+│   ├── ai_client_api/                    # AIClient ABC (provider-agnostic)
+│   ├── gemini_ai_client_impl/            # Google Gemini implementation
+│   └── intelligent_app_service/          # AI orchestration + tool dispatch
 ├── tests/
-│   ├── integration/                      # DI wiring and adapter integration tests
-│   └── e2e/                              # End-to-end tests
+│   ├── integration/                      # DI wiring, adapter, and cross-vertical tests
+│   └── e2e/                              # End-to-end tests (local + deployed)
 ├── docs/                                 # MkDocs documentation source
 ├── .circleci/                            # CircleCI configuration
+├── fly.toml                              # Fly.io IaC declaration
+├── DESIGN.md                             # Detailed architecture / design doc
 ├── pyproject.toml                        # Workspace config (dependencies, tools)
 └── uv.lock                              # Locked dependency versions
 ```
@@ -54,7 +101,7 @@ OSPSD-OUTLOOK-CALENDAR-TEAM12/
 ## Project Setup
 ### 1. Prerequisites
 
-- Python 3.11 or higher
+- Python 3.12 or higher
 - `uv` - Python package manager
 
 ### 2. Initial Setup
@@ -181,8 +228,13 @@ The service will be available at `http://localhost:8000`. Visit `/docs` for the 
 | `AZURE_CLIENT_ID` | Azure app registration client ID |
 | `AZURE_CLIENT_SECRET` | Azure app registration client secret |
 | `AZURE_AUTHORITY` | `https://login.microsoftonline.com/consumers` |
-| `SESSION_SECRET_KEY` | Secret key for session middleware |
+| `SESSION_SECRET_KEY` | Required in production for session middleware (a dev fallback is generated locally when unset) |
 | `CORS_ORIGINS` | Comma-separated allowed origins |
+| `GEMINI_API_KEY` | Google Gemini API key for the AI client |
+| `SLACK_BOT_TOKEN` | Slack bot OAuth token (`xoxb-…`) for the chat adapter |
+| `SLACK_AUTH_TOKEN` | Token used to authenticate Slack auth callbacks (avoids trusting raw `slack_user_id` from URLs) |
+| `ENABLE_SLACK_POLLER` | `true` to enable the background Slack poller (default: `false`) |
+| `CHAT_CLIENT_IMPL_MODULE` | Optional: name of a chat impl module to import at startup (e.g. our `outlook_client_service.slack_chat_client`); used only when no impl has been registered yet |
 
 ## Deployment
 
