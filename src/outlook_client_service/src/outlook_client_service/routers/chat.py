@@ -3,8 +3,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from chat_client_api import ChatClient
-from chat_client_api import get_client as _get_chat_impl
+from chat_client_api import ChatClient  # noqa: TC002 - FastAPI evaluates Annotated dependencies at runtime.
 from fastapi import APIRouter, Depends
 from intelligent_app_service.service import (
     IntelligentAppService,  # noqa: TC002 — FastAPI evaluates Annotated type hints at runtime; moving to TYPE_CHECKING breaks dependency injection
@@ -13,6 +12,8 @@ from intelligent_app_service.wiring import (
     get_intelligent_app as get_intelligent_app,  # noqa: PLC0414 — explicit re-export required by mypy strict for test dependency overrides
 )
 from pydantic import BaseModel
+
+from outlook_client_service.chat_registry import get_registered_chat_client
 
 router = APIRouter(tags=["chat"])
 
@@ -32,10 +33,8 @@ class ChatResponse(BaseModel):
 
 
 def get_chat_client() -> ChatClient:
-    """Return the registered chat client (Slack implementation auto-registered on import)."""
-    import slack_client_impl  # noqa: PLC0415 — registers SlackClient via DI pattern on import
-    _ = slack_client_impl
-    return _get_chat_impl()
+    """Return the runtime-registered chat client."""
+    return get_registered_chat_client()
 
 
 def get_chat_intelligent_app() -> IntelligentAppService:

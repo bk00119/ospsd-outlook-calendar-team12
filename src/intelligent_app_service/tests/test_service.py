@@ -233,3 +233,29 @@ def test_tool_update_event_calls_calendar() -> None:
     assert patch_arg.location == "Conference Room B"
     assert patch_arg.description == "Updated agenda"
     assert "evt-updated-1" in result
+
+
+@pytest.mark.unit
+def test_tool_update_event_rejects_time_conflict() -> None:
+    """Verify update_outlook_event refuses conflicting time changes."""
+    service, mock_ai, mock_cal = _make_service()
+    current_event = MagicMock()
+    current_event.id = "evt-updated-1"
+    current_event.starts_at = datetime(2026, 4, 23, 14, 0, tzinfo=UTC)
+    current_event.ends_at = datetime(2026, 4, 23, 15, 0, tzinfo=UTC)
+    conflicting_event = MagicMock()
+    conflicting_event.id = "evt-other"
+    mock_cal.get_event.return_value = current_event
+    mock_cal.list_events.return_value = [current_event, conflicting_event]
+
+    service.process_chat(message="test")
+    tools = _extract_tools(mock_ai)
+
+    result = tools["update_outlook_event"](
+        event_id="evt-updated-1",
+        new_start_iso_string="2026-04-23T16:00:00+00:00",
+        new_end_iso_string="2026-04-23T17:00:00+00:00",
+    )
+
+    mock_cal.update_event.assert_not_called()
+    assert "conflicts" in result

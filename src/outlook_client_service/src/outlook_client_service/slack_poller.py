@@ -7,13 +7,13 @@ import os
 import re
 import time
 from collections import deque
+from datetime import datetime
 from threading import Thread
 
-import slack_client_impl  # noqa: F401
-from chat_client_api.client import get_client
 from dotenv import load_dotenv
 from intelligent_app_service.wiring import get_intelligent_app
 
+from outlook_client_service.chat_registry import get_registered_chat_client
 from outlook_client_service.config import settings
 from outlook_client_service.dependencies import get_calendar_client_for_slack_user
 from outlook_client_service.routers.auth import SLACK_AUTH_QUERY_PARAM, create_slack_auth_token
@@ -67,7 +67,7 @@ class SlackMessageGuard:
         message_id: str,
         sender: str,
         text: str,
-        timestamp: str,
+        timestamp: object,
     ) -> tuple[bool, float | None]:
         """Return whether a Slack message should be processed."""
         if self._processed_store.contains(message_id):
@@ -114,8 +114,15 @@ def _strip_bot_mention(text: str, bot_user_id: str) -> str:
     return text.replace(f"<@{bot_user_id}>", "").strip()
 
 
-def _parse_message_timestamp(timestamp: str) -> float | None:
+def _parse_message_timestamp(timestamp: object) -> float | None:
     """Parse a chat message timestamp into a comparable float."""
+    if isinstance(timestamp, datetime):
+        return timestamp.timestamp()
+    if isinstance(timestamp, (int, float)):
+        return float(timestamp)
+    if not isinstance(timestamp, str):
+        logger.warning("Could not parse message timestamp: %s", timestamp)
+        return None
     try:
         return float(timestamp)
     except ValueError:
@@ -181,7 +188,7 @@ def run_slack_poller() -> None:
     channel_id = _require_env(CHANNEL_ID_ENV, os.getenv(CHANNEL_ID_ENV))
     user_timezone = os.getenv(USER_TIMEZONE_ENV, DEFAULT_USER_TIMEZONE)
 
-    chat_client = get_client()
+    chat_client = get_registered_chat_client()
 
     processed_store = ProcessedMessageStore(MAX_PROCESSED_IDS)
     message_guard = SlackMessageGuard(bot_user_id, processed_store)

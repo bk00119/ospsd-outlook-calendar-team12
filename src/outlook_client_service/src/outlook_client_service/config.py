@@ -1,11 +1,26 @@
 """Configuration settings for the Outlook client service."""
 
 import os
+import secrets
 from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _load_session_secret_key() -> str:
+    """Load the session signing key without falling back to a hardcoded value."""
+    configured_secret = os.getenv("SESSION_SECRET_KEY")
+    if configured_secret:
+        return configured_secret
+
+    environment = os.getenv("ENVIRONMENT", os.getenv("APP_ENV", "development")).lower()
+    if environment in {"prod", "production"}:
+        msg = "SESSION_SECRET_KEY must be configured in production."
+        raise RuntimeError(msg)
+
+    return secrets.token_urlsafe(32)
 
 
 @dataclass(frozen=True)
@@ -30,7 +45,7 @@ class Settings:
     )
     azure_authority: str = os.getenv("AZURE_AUTHORITY", "https://login.microsoftonline.com/consumers")
 
-    session_secret_key: str = os.getenv("SESSION_SECRET_KEY", "dev-secret-key")
+    session_secret_key: str = _load_session_secret_key()
 
     cors_origins_raw: str = os.getenv("CORS_ORIGINS", "http://localhost:8000")
 

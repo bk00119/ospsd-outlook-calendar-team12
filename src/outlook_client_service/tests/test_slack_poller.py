@@ -2,6 +2,7 @@
 
 import time as time_module
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -11,6 +12,7 @@ from outlook_client_service.routers import auth
 from outlook_client_service import slack_poller
 
 NEW_MESSAGE_TIMESTAMP = 101.0
+DEFAULT_MESSAGE_DATETIME = datetime.fromtimestamp(9_999_999_999.0, tz=UTC)
 
 
 class StopPollingError(Exception):
@@ -49,7 +51,7 @@ class FakeChatClient:
             channel=channel_id,
             text=text,
             sender="BOT_USER",
-            timestamp="9999999999.0",
+            timestamp=DEFAULT_MESSAGE_DATETIME,
         )
 
 
@@ -70,7 +72,7 @@ def _message(
     message_id: str,
     text: str,
     sender: str = "USER_1",
-    timestamp: str = "9999999999.0",
+    timestamp: datetime = DEFAULT_MESSAGE_DATETIME,
 ) -> Message:
     """Build a fake chat message."""
     return Message(
@@ -257,7 +259,7 @@ def test_run_slack_poller_routes_mention_to_service(monkeypatch: pytest.MonkeyPa
     monkeypatch.setenv(slack_poller.BOT_USER_ID_ENV, "BOT_USER")
     monkeypatch.setenv(slack_poller.CHANNEL_ID_ENV, "C_TEST")
     monkeypatch.setenv(slack_poller.USER_TIMEZONE_ENV, "America/New_York")
-    monkeypatch.setattr(slack_poller, "get_client", lambda: fake_chat)
+    monkeypatch.setattr(slack_poller, "get_registered_chat_client", lambda: fake_chat)
     monkeypatch.setattr(
         slack_poller,
         "get_intelligent_app",
@@ -291,7 +293,7 @@ def test_run_slack_poller_ignores_non_mentions(monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setenv(slack_poller.BOT_USER_ID_ENV, "BOT_USER")
     monkeypatch.setenv(slack_poller.CHANNEL_ID_ENV, "C_TEST")
-    monkeypatch.setattr(slack_poller, "get_client", lambda: fake_chat)
+    monkeypatch.setattr(slack_poller, "get_registered_chat_client", lambda: fake_chat)
     monkeypatch.setattr(
         slack_poller,
         "get_intelligent_app",

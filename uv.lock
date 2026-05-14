@@ -375,7 +375,7 @@ wheels = [
 [[package]]
 name = "chat-client-api"
 version = "0.1.0"
-source = { git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source?subdirectory=components%2Fchat_client_api&branch=feat%2Fhw3#c47357dc13c0235170aaf435cfd91c723c5a4009" }
+source = { git = "https://github.com/HarshithKoriRaj/Shared-API#ebb37e189065760f2090f1488d376485b7b56b20" }
 
 [[package]]
 name = "click"
@@ -1684,7 +1684,7 @@ dependencies = [
     { name = "outlook-client-impl" },
     { name = "pydantic" },
     { name = "python-dotenv" },
-    { name = "slack-client-impl" },
+    { name = "slack-sdk" },
     { name = "structlog" },
     { name = "uvicorn" },
 ]
@@ -1699,7 +1699,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "calendar-client-api", editable = "src/calendar_client_api" },
-    { name = "chat-client-api", git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source?subdirectory=components%2Fchat_client_api&branch=feat%2Fhw3" },
+    { name = "chat-client-api", git = "https://github.com/HarshithKoriRaj/Shared-API" },
     { name = "fastapi" },
     { name = "httpx", marker = "extra == 'test'" },
     { name = "intelligent-app-service", editable = "src/intelligent_app_service" },
@@ -1714,7 +1714,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
     { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.10.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
-    { name = "slack-client-impl", git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source?subdirectory=components%2Fslack_client_impl&branch=feat%2Fhw3" },
+    { name = "slack-sdk", specifier = ">=3.33.5" },
     { name = "structlog", specifier = ">=24.4.0" },
     { name = "uvicorn" },
 ]
@@ -2254,15 +2254,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
-]
-
-[[package]]
-name = "slack-client-impl"
-version = "0.1.0"
-source = { git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source?subdirectory=components%2Fslack_client_impl&branch=feat%2Fhw3#c47357dc13c0235170aaf435cfd91c723c5a4009" }
-dependencies = [
-    { name = "chat-client-api" },
-    { name = "slack-sdk" },
 ]
 
 [[package]]
