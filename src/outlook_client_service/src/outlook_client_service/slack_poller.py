@@ -17,6 +17,7 @@ from outlook_client_service.chat_registry import get_registered_chat_client
 from outlook_client_service.config import settings
 from outlook_client_service.dependencies import get_calendar_client_for_slack_user
 from outlook_client_service.routers.auth import SLACK_AUTH_QUERY_PARAM, create_slack_auth_token
+from outlook_client_service.telemetry import slack_messages_processed
 
 POLL_INTERVAL_SECONDS = 3
 DEFAULT_LIMIT = 20
@@ -160,24 +161,29 @@ def _handle_message(
     """Process one Slack message and return a reply if needed."""
     user_text = _strip_bot_mention(text, bot_user_id)
     if not user_text:
+        slack_messages_processed.add(1, {"outcome": "no_text"})
         return None
 
     calendar_client = get_calendar_client_for_slack_user(sender)
 
     if calendar_client is None:
         auth_link = _build_auth_link(sender)
+        slack_messages_processed.add(1, {"outcome": "auth_required"})
         return f"<@{sender}> Please connect your calendar first: {auth_link}"
 
     service = get_intelligent_app(calendar_client=calendar_client)
 
     logger.info("Processing Slack message from %s: %s", sender, user_text)
     try:
-        return service.process_chat(
+        reply = service.process_chat(
             message=user_text,
             user_timezone=user_timezone,
         )
     except Exception as exc:  # noqa: BLE001
+        slack_messages_processed.add(1, {"outcome": "ai_error"})
         return f"Error processing request: {exc}"
+    slack_messages_processed.add(1, {"outcome": "ok"})
+    return reply
 
 
 def run_slack_poller() -> None:

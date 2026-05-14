@@ -116,10 +116,6 @@ def configure_telemetry(app: FastAPI) -> None:
 
 
 _meter = metrics.get_meter(_SERVICE_NAME)
-ai_tool_calls = _meter.create_counter(
-    "ai_tool_calls",
-    description="AI tool-call invocations, labeled by tool name and outcome.",
-)
 slack_messages_processed = _meter.create_counter(
     "slack_messages_processed",
     description="Slack messages processed by the poller, labeled by outcome.",
