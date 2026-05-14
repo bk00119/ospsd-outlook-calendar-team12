@@ -3,66 +3,17 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from dataclasses import replace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 from typing import Any, ClassVar
+from urllib.parse import parse_qs
 
 import pytest
-import requests
-from chat_client_api.client import Channel, ChatClient, Message, _ClientRegistry, register_client
+from chat_client_api.client import _ClientRegistry, register_client
 from fastapi.testclient import TestClient
-
-
-class HttpBackedChatClient(ChatClient):
-    """Small HTTP-backed client used to exercise the real shared ChatClient contract."""
-
-    def __init__(self, base_url: str) -> None:
-        """Initialize the test client with a stub server URL."""
-        self._base_url = base_url.rstrip("/")
-
-    def send_message(self, channel_id: str, text: str) -> Message:
-        """Send a message through the HTTP stub."""
-        response = requests.post(
-            f"{self._base_url}/chat.postMessage",
-            json={"channel": channel_id, "text": text},
-            timeout=5,
-        )
-        response.raise_for_status()
-        payload: dict[str, Any] = response.json()
-        return Message(
-            message_id=str(payload["ts"]),
-            channel=str(payload["channel"]),
-            text=str(payload["message"]["text"]),
-            sender=str(payload.get("bot_id", "bot")),
-            timestamp=datetime.fromtimestamp(float(payload["ts"]), tz=UTC),
-        )
-
-    def get_channels(self) -> list[Channel]:
-        """List channels; not needed for this integration path."""
-        raise NotImplementedError
-
-    def get_channel(self, channel_id: str) -> Channel:
-        """Get one channel; not needed for this integration path."""
-        raise NotImplementedError
-
-    def get_messages(
-        self,
-        channel_id: str,
-        limit: int = 10,
-        cursor: str | None = None,
-    ) -> list[Message]:
-        """Fetch recent messages; not needed for this integration path."""
-        raise NotImplementedError
-
-    def get_message(self, message_id: str) -> Message:
-        """Fetch one message; not needed for this integration path."""
-        raise NotImplementedError
-
-    def delete_message(self, message_id: str) -> None:
-        """Delete one message; not needed for this integration path."""
-        raise NotImplementedError
+from slack_sdk import WebClient
 
 
 class _SlackStubHandler(BaseHTTPRequestHandler):
@@ -74,7 +25,14 @@ class _SlackStubHandler(BaseHTTPRequestHandler):
         """Record a POST request and return a Slack-like JSON response."""
         body_length = int(self.headers.get("Content-Length", "0"))
         body = self.rfile.read(body_length)
-        payload = json.loads(body.decode("utf-8"))
+        body_text = body.decode("utf-8")
+        try:
+            payload = json.loads(body_text)
+        except json.JSONDecodeError:
+            payload = {
+                key: values[0]
+                for key, values in parse_qs(body_text).items()
+            }
         self.recorded_requests.append({"path": self.path, "json": payload})
 
         response = {
@@ -102,8 +60,11 @@ def test_chat_route_uses_registered_shared_chat_client_against_http_stub(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """POST /chat/ should send the AI response through the registered chat client."""
-    from outlook_client_service.main import create_app
+    from outlook_client_service.config import settings
     from outlook_client_service.routers.chat import get_chat_intelligent_app
+    from outlook_client_service.slack_chat_client import Team12SlackClient
+
+    from outlook_client_service import main
 
     class StubService:
         """Minimal intelligent app stub for the route boundary."""
@@ -115,6 +76,11 @@ def test_chat_route_uses_registered_shared_chat_client_against_http_stub(
             return "Created event: review at 2pm."
 
     monkeypatch.setattr(_ClientRegistry, "_factory", _ClientRegistry.get())
+    monkeypatch.setattr(
+        main,
+        "settings",
+        replace(settings, enable_slack_poller=False),
+    )
     _SlackStubHandler.recorded_requests = []
     server = ThreadingHTTPServer(("127.0.0.1", free_tcp_port), _SlackStubHandler)
     server_thread = Thread(
@@ -123,9 +89,18 @@ def test_chat_route_uses_registered_shared_chat_client_against_http_stub(
         daemon=True,
     )
     server_thread.start()
-    register_client(lambda: HttpBackedChatClient(f"http://127.0.0.1:{free_tcp_port}"))
+    register_client(
+        lambda: Team12SlackClient(
+            token="xoxb-test",
+            web_client=WebClient(
+                token="xoxb-test",
+                base_url=f"http://127.0.0.1:{free_tcp_port}/",
+                timeout=2,
+            ),
+        ),
+    )
 
-    app = create_app()
+    app = main.create_app()
     stub_service = StubService()
     app.dependency_overrides[get_chat_intelligent_app] = lambda: stub_service
 
