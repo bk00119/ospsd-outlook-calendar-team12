@@ -128,6 +128,8 @@ def login(
     slack_auth_token: Annotated[str | None, Query(alias=SLACK_AUTH_QUERY_PARAM)] = None,
 ) -> RedirectResponse:
     """Redirect the user to Microsoft's authorization page."""
+    if settings.calendar_provider == "google":
+        return RedirectResponse(url="/docs")
     if slack_auth_token:
         request.session[SESSION_SLACK_USER_ID] = _resolve_slack_auth_token(slack_auth_token)
 

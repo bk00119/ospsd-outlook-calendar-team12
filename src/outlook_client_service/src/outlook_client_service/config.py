@@ -55,5 +55,13 @@ class Settings:
 
     enable_slack_poller: bool = os.getenv("ENABLE_SLACK_POLLER", "false").lower() == "true"
 
+    calendar_provider: str = os.getenv("CALENDAR_PROVIDER", "outlook").strip().lower()
+    google_credentials_file: str = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json")
+    google_token_file: str = os.getenv("GOOGLE_TOKEN_FILE", "token.json")
+    google_calendar_id: str = os.getenv("GOOGLE_CALENDAR_ID", "primary")
+    google_interactive_auth: bool = (
+            os.getenv("GOOGLE_INTERACTIVE_AUTH", "false").lower() == "true"
+    )
+
 
 settings = Settings()

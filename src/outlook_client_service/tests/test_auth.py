@@ -27,6 +27,7 @@ class OAuthSettingsStub:
     azure_redirect_uri: str
     azure_client_id: str
     azure_client_secret: str = "client-secret"
+    calendar_provider: str = "outlook"
 
 
 @pytest.fixture
@@ -255,6 +256,24 @@ class TestLogin:
 
         assert exc_info.value.status_code == HTTPStatus.BAD_REQUEST
         assert exc_info.value.detail == "Invalid or expired Slack authentication token."
+
+    def test_login_redirects_to_docs_for_google_provider(
+        self,
+        request_with_session: Request,
+    ) -> None:
+        """Redirect to docs instead of Microsoft OAuth for the Google provider."""
+        settings_stub = OAuthSettingsStub(
+            azure_authority="https://login.example.com",
+            azure_redirect_uri="http://localhost:8000/auth/callback",
+            azure_client_id="client-id-123",
+            calendar_provider="google",
+        )
+
+        with patch("outlook_client_service.routers.auth.settings", settings_stub):
+            response = auth.login(request_with_session)
+
+        assert response.status_code == HTTPStatus.TEMPORARY_REDIRECT
+        assert response.headers["location"] == "/docs"
 
 
 class TestLogout:
