@@ -60,7 +60,7 @@ def retry_until(
     raise AssertionError(TIMEOUT_MSG)
 
 
-pytestmark = [pytest.mark.e2e, pytest.mark.slow]
+pytestmark = [pytest.mark.e2e, pytest.mark.graph_e2e, pytest.mark.slow]
 
 
 def _utc_now() -> datetime.datetime:

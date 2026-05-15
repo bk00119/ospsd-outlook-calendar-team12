@@ -439,16 +439,21 @@ class OutlookClient(Client):
         end: datetime.datetime | None = None,
         types: list[str] | None = None,
     ) -> list[Event]:
-        """Return a filtered list of calendar events from Outlook.
+        """Return calendar events that overlap the given window.
+
+        Uses half-open overlap semantics: an event is included when it
+        intersects ``[start, end)``. This is required for conflict
+        detection — an event running 1:30-2:30 PM must be returned by a
+        2-3 PM query so the caller can detect the overlap.
 
         Args:
-            start: If provided, only return events that start at or after this time.
-            end: If provided, only return events that end at or before this time.
+            start: If provided, exclude events that end at or before this time.
+            end: If provided, exclude events that start at or after this time.
             types: If provided, only return events whose type is in this list
                    (e.g. ``["singleInstance", "occurrence"]``).
 
         Returns:
-            A list of :class:`Event` instances matching the given criteria.
+            A list of :class:`Event` instances overlapping the window.
 
         Raises:
             RuntimeError: If the client has no configured service.
@@ -465,9 +470,9 @@ class OutlookClient(Client):
             raw_data = self._serialize_provider_payload(item)
             ev = get_event_impl(event_id=item_id, raw_data=raw_data)
 
-            if start is not None and ev.starts_at < start:
+            if start is not None and ev.ends_at <= start:
                 continue
-            if end is not None and ev.ends_at > end:
+            if end is not None and ev.starts_at >= end:
                 continue
 
             results.append(ev)
@@ -588,7 +593,6 @@ class OutlookClient(Client):
             return get_event_impl(event_id=clean_event_id, raw_data=raw_data)
 
         return self.get_event(clean_event_id)
-
 
 
 def get_client_impl(*, interactive: bool = False) -> Client:

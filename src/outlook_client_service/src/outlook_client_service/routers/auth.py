@@ -1,5 +1,6 @@
 """Authentication routes for the Outlook client service."""
 
+import secrets
 import time
 from http import HTTPStatus
 from typing import Annotated
@@ -7,7 +8,7 @@ from urllib.parse import urlencode
 
 import requests
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from outlook_client_service.config import settings
 
@@ -15,7 +16,18 @@ SCOPES = [
     "offline_access",
     "https://graph.microsoft.com/Calendars.ReadWrite",
 ]
+SLACK_AUTH_QUERY_PARAM = "slack_auth_token"
+SESSION_OAUTH_STATE = "oauth_state"
+SESSION_SLACK_USER_ID = "slack_user_id"
+_SESSION_TOKEN_KEYS = (
+    "access_token",
+    "refresh_token",
+    "expires_in",
+    "expires_at",
+)
 
+_slack_user_token_store: dict[str, dict[str, object]] = {}
+_pending_slack_auth_tokens: dict[str, str] = {}
 
 router = APIRouter()
 
@@ -38,9 +50,89 @@ def _store_token_data(request: Request, token_data: dict[str, object]) -> None:
         request.session["expires_at"] = int(time.time()) + expires_in
 
 
+def _current_session_token_data(request: Request) -> dict[str, object]:
+    """Return token data currently stored in the session."""
+    return {
+        key: value
+        for key in _SESSION_TOKEN_KEYS
+        if (value := request.session.get(key)) is not None
+    }
+
+
+def bind_slack_user_to_current_session(request: Request) -> None:
+    """Bind the current authenticated calendar session to a Slack user."""
+    slack_user_id = request.session.get(SESSION_SLACK_USER_ID)
+    if not isinstance(slack_user_id, str) or not slack_user_id:
+        return
+
+    token_data = _current_session_token_data(request)
+    access_token = token_data.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        return
+
+    _slack_user_token_store[slack_user_id] = token_data
+
+
+def get_slack_user_token_data(slack_user_id: str) -> dict[str, object] | None:
+    """Return stored token data for a Slack user, if available."""
+    return _slack_user_token_store.get(slack_user_id)
+
+
+def create_slack_auth_token(slack_user_id: str) -> str:
+    """Create a short-lived auth token for linking a Slack user."""
+    token = secrets.token_urlsafe(32)
+    _pending_slack_auth_tokens[token] = slack_user_id
+    return token
+
+
+def _resolve_slack_auth_token(slack_auth_token: str) -> str:
+    """Resolve a Slack auth token to a Slack user ID.
+
+    Uses ``dict.get`` rather than ``dict.pop`` so the token survives any
+    GET that isn't the user's real click — browser pre-fetchers and
+    URL-scanning antivirus all issue a GET that would otherwise consume
+    a single-use token and leave the user with a 400. The trade-off is
+    that tokens accumulate in ``_pending_slack_auth_tokens`` until the
+    process restarts; a future iteration should sign them as JWTs so the
+    server-side dict can be removed entirely.
+    """
+    slack_user_id = _pending_slack_auth_tokens.get(slack_auth_token)
+    if not slack_user_id:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="Invalid or expired Slack authentication token.",
+        )
+    return slack_user_id
+
+
+def _create_oauth_state(request: Request) -> str:
+    """Create and store an OAuth state value for CSRF protection."""
+    state = secrets.token_urlsafe(32)
+    request.session[SESSION_OAUTH_STATE] = state
+    return state
+
+
+def _verify_oauth_state(request: Request, state: str | None) -> None:
+    """Validate the OAuth state value returned by the provider."""
+    expected_state = request.session.pop(SESSION_OAUTH_STATE, None)
+    if not isinstance(expected_state, str) or state != expected_state:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="Invalid OAuth state",
+        )
+
+
 @router.get("/login")
-def login() -> RedirectResponse:
+def login(
+    request: Request,
+    slack_auth_token: Annotated[str | None, Query(alias=SLACK_AUTH_QUERY_PARAM)] = None,
+) -> RedirectResponse:
     """Redirect the user to Microsoft's authorization page."""
+    if settings.calendar_provider == "google":
+        return RedirectResponse(url="/docs")
+    if slack_auth_token:
+        request.session[SESSION_SLACK_USER_ID] = _resolve_slack_auth_token(slack_auth_token)
+
     if not settings.azure_client_id:
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="AZURE_CLIENT_ID is not configured.")
 
@@ -50,6 +142,7 @@ def login() -> RedirectResponse:
         "redirect_uri": settings.azure_redirect_uri,
         "response_mode": "query",
         "scope": " ".join(SCOPES),
+        "state": _create_oauth_state(request),
     }
 
     auth_url = f"{settings.azure_authority}/oauth2/v2.0/authorize?{urlencode(params)}"
@@ -59,6 +152,10 @@ def login() -> RedirectResponse:
 @router.post("/logout")
 def logout(request: Request) -> dict[str, str]:
     """Clear the current session."""
+    slack_user_id = request.session.get(SESSION_SLACK_USER_ID)
+    if isinstance(slack_user_id, str):
+        _slack_user_token_store.pop(slack_user_id, None)
+
     request.session.clear()
     return {"message": "Logged out successfully."}
 
@@ -93,6 +190,70 @@ def refresh_access_token(request: Request) -> str:
     return stored_access_token
 
 
+def _refresh_slack_user_token_data(slack_user_id: str, token_data: dict[str, object]) -> str | None:
+    """Refresh and store token data for a Slack-linked calendar session."""
+    refresh_token = token_data.get("refresh_token")
+    if not isinstance(refresh_token, str) or not refresh_token:
+        _slack_user_token_store.pop(slack_user_id, None)
+        return None
+
+    token_url = f"{settings.azure_authority}/oauth2/v2.0/token"
+    data = {
+        "client_id": settings.azure_client_id,
+        "client_secret": settings.azure_client_secret,
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "redirect_uri": settings.azure_redirect_uri,
+        "scope": " ".join(SCOPES),
+    }
+
+    response = requests.post(token_url, data=data, timeout=10)
+    refreshed_token_data = response.json()
+    if response.status_code != HTTPStatus.OK:
+        _slack_user_token_store.pop(slack_user_id, None)
+        return None
+
+    access_token = refreshed_token_data.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        _slack_user_token_store.pop(slack_user_id, None)
+        return None
+
+    new_token_data = dict(token_data)
+    new_token_data["access_token"] = access_token
+
+    new_refresh_token = refreshed_token_data.get("refresh_token")
+    if isinstance(new_refresh_token, str) and new_refresh_token:
+        new_token_data["refresh_token"] = new_refresh_token
+
+    expires_in = refreshed_token_data.get("expires_in")
+    if isinstance(expires_in, int):
+        new_token_data["expires_in"] = expires_in
+        new_token_data["expires_at"] = int(time.time()) + expires_in
+
+    _slack_user_token_store[slack_user_id] = new_token_data
+    return access_token
+
+
+def get_valid_access_token_for_slack_user(
+    slack_user_id: str,
+    refresh_buffer_seconds: int = 60,
+) -> str | None:
+    """Return a valid access token for a Slack-linked calendar session."""
+    token_data = get_slack_user_token_data(slack_user_id)
+    if token_data is None:
+        return None
+
+    access_token = token_data.get("access_token")
+    expires_at = token_data.get("expires_at")
+    now = int(time.time())
+
+    if isinstance(access_token, str) and access_token:
+        if isinstance(expires_at, int) and now < expires_at - refresh_buffer_seconds:
+            return access_token
+        return _refresh_slack_user_token_data(slack_user_id, token_data)
+
+    return _refresh_slack_user_token_data(slack_user_id, token_data)
+
 
 def get_valid_access_token(request: Request, refresh_buffer_seconds: int = 60) -> str:
     """Return a valid access token, refreshing it if it is missing or near expiry."""
@@ -112,9 +273,10 @@ def get_valid_access_token(request: Request, refresh_buffer_seconds: int = 60) -
 def callback(
     request: Request,
     code: Annotated[str | None, Query()] = None,
+    state: Annotated[str | None, Query()] = None,
     error: Annotated[str | None, Query()] = None,
     error_description: Annotated[str | None, Query()] = None,
-) -> dict[str, str]:
+) -> HTMLResponse:
     """Handle the OAuth callback from Microsoft."""
     if error:
         detail = error_description or error
@@ -122,6 +284,8 @@ def callback(
 
     if not code:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="Missing authorization code.")
+
+    _verify_oauth_state(request, state)
 
     token_url = f"{settings.azure_authority}/oauth2/v2.0/token"
 
@@ -139,4 +303,20 @@ def callback(
     if response.status_code != HTTPStatus.OK:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=token_data)
     _store_token_data(request, token_data)
-    return {"message": "Authentication successful."}
+    bind_slack_user_to_current_session(request)
+    return HTMLResponse(
+        content="""
+        <!doctype html>
+        <html lang="en">
+            <head>
+                <meta charset="utf-8">
+                <title>Authentication Successful</title>
+            </head>
+            <body style="font-family: system-ui, sans-serif; margin: 48px; line-height: 1.5;">
+                <h1>Authentication successful</h1>
+                <p>Your calendar is now connected. You can close this tab and return to Slack.</p>
+            </body>
+        </html>
+        """,
+        status_code=HTTPStatus.OK,
+    )

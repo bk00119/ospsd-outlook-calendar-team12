@@ -16,6 +16,7 @@ dev = [
     "pymdown-extensions>=10.16.1",
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
+    "pytest-httpserver>=1.1.0",
     "ruff>=0.12.7",
     "types-python-dateutil>=2.9.0.20250822",
     "types-requests>=2.32.4.20250611",
@@ -28,6 +29,9 @@ members = [
     "src/outlook_client_service",
     "src/outlook_client_service_api_client",
     "src/outlook_service_client_adapter",
+    "src/ai_client_api",
+    "src/gemini_ai_client_impl",
+    "src/intelligent_app_service",
 ]
 
 [tool.ruff]
@@ -62,8 +66,15 @@ mypy_path = [
     "src/outlook_client_impl/src",
     "src/outlook_client_service/src",
     "src/outlook_service_client_adapter/src",
+    "src/ai_client_api/src",
+    "src/gemini_ai_client_impl/src",
+    "src/intelligent_app_service/src",
 ]
 ignore_missing_imports = false
+
+[[tool.mypy.overrides]]
+module = ["chat_client_api", "chat_client_api.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 pythonpath = [
@@ -72,6 +83,9 @@ pythonpath = [
     "src/outlook_client_impl/src",
     "src/outlook_client_service/src",
     "src/outlook_service_client_adapter/src",
+    "src/ai_client_api/src",
+    "src/gemini_ai_client_impl/src",
+    "src/intelligent_app_service/src",
 ]
 testpaths = ["tests", "src/*/tests"]
 addopts = ["--cov", "--cov-report=term-missing", "--import-mode=importlib"]

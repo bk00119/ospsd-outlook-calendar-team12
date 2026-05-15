@@ -7,7 +7,7 @@ jobs:
   # Job 1: Setup Environment and Install All Dependencies
   build:
     docker:
-      - image: cimg/python:3.11 # Use a consistent Python version
+      - image: cimg/python:3.12 # Use a consistent Python version
     steps:
       - checkout
       - run:
@@ -21,7 +21,7 @@ jobs:
           name: "Create Virtual Env & Install All Dependencies via UV Sync"
           command: |
             # Create venv in the default .venv location
-            uv venv --python 3.11
+            uv venv --python 3.12
             source .venv/bin/activate
             # Install all dependencies including dev/test extras
             uv sync --all-packages --extra dev --verbose
@@ -43,7 +43,7 @@ jobs:
   # Job 2: Linting and Formatting Checks
   lint:
     docker:
-      - image: cimg/python:3.11
+      - image: cimg/python:3.12
     steps:
       - attach_workspace:
           at: . # Attach the workspace persisted from 'build'
@@ -56,7 +56,7 @@ jobs:
   # Job 3: Unit Tests and Coverage (Fast, No External Dependencies)
   unit_test:
     docker:
-      - image: cimg/python:3.11
+      - image: cimg/python:3.12
     steps:
       - attach_workspace:
           at: . # Attach the workspace persisted from 'build'
@@ -90,7 +90,7 @@ jobs:
   # Job 4: CircleCI Integration Tests (All Tests Except Local Credentials)
   circleci_test:
     docker:
-      - image: cimg/python:3.11
+      - image: cimg/python:3.12
     # Environment variables from the 'outlook-client' context will be available here
     steps:
       - attach_workspace:
@@ -118,7 +118,7 @@ jobs:
   # Job 5: Integration Tests with Real Credentials (Optional - Branch Restricted)
   integration_test:
     docker:
-      - image: cimg/python:3.11
+      - image: cimg/python:3.12
     # Environment variables from the 'outlook-client' context will be available here
     steps:
       - attach_workspace:
@@ -153,21 +153,28 @@ jobs:
       - store_artifacts:
           path: test-results/integration
 
-  # Job 6: Deploy to Render
+  # Job 6: Deploy to Fly.io
   deploy:
     docker:
       - image: cimg/base:stable
     steps:
+      - checkout
       - run:
-          name: "Trigger Render Deploy"
+          name: "Install flyctl"
           command: |
-            if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-              echo "ERROR: RENDER_DEPLOY_HOOK_URL is not set."
+            # The installer prompts "add to PATH? (Y/n)" on non-TTY stdin and
+            # exits non-zero; the binary is installed fine by then, so swallow
+            # the exit code and wire PATH ourselves.
+            curl -L https://fly.io/install.sh | sh || true
+            "$HOME/.fly/bin/flyctl" version
+      - run:
+          name: "Deploy to Fly.io"
+          command: |
+            if [ -z "$FLY_API_TOKEN" ]; then
+              echo "ERROR: FLY_API_TOKEN is not set in CircleCI environment variables."
               exit 1
             fi
-            echo "Triggering Render deployment..."
-            curl -sf "$RENDER_DEPLOY_HOOK_URL" || { echo "Deploy hook request failed."; exit 1; }
-            echo "Render deployment triggered successfully."
+            "$HOME/.fly/bin/flyctl" deploy --remote-only --config fly.toml
 
   # Job 7: Report Summary
   report_summary:
@@ -262,7 +269,7 @@ workflows:
                 - main
                 - develop
 
-      # Deploy to Render after tests pass (hw-2 branch only)
+      # Deploy to Fly.io after tests pass (hw-3 and tester branch)
       - deploy:
           requires:
             - lint
@@ -270,7 +277,8 @@ workflows:
           filters:
             branches:
               only:
-                - hw-2
+                - hw-3
+                - jaik/hw3-deployment-telemetry
 
       # Optional: Report summary after core tests
       - report_summary:
