@@ -25,7 +25,14 @@ _MESSAGE_ID_SEPARATOR = ":"
 class _SlackWebClient(Protocol):
     """Subset of Slack SDK WebClient used by this adapter."""
 
-    def chat_postMessage(self, *, channel: str, text: str) -> object:  # noqa: N802
+    def chat_postMessage(  # noqa: N802
+        self,
+        *,
+        channel: str,
+        text: str,
+        unfurl_links: bool = True,
+        unfurl_media: bool = True,
+    ) -> object:
         """Post a Slack message."""
 
     def conversations_list(self, **kwargs: object) -> object:
@@ -116,9 +123,23 @@ class Team12SlackClient(ChatClient):
         self._client = cast("_SlackWebClient", web_client or WebClient(token=token))
 
     def send_message(self, channel_id: str, text: str) -> Message:
-        """Send a message to a Slack channel."""
+        """Send a message to a Slack channel.
+
+        Disables Slack's link unfurler so URLs in outgoing messages aren't
+        pre-fetched server-side. The Slack auth-link flow uses single-use
+        ``slack_auth_token`` query parameters, and Slack's unfurler issuing
+        a GET would consume the token before the user clicks, leaving the
+        user with a 400 ``Invalid or expired Slack authentication token``.
+        """
         try:
-            response = _as_dict(self._client.chat_postMessage(channel=channel_id, text=text))
+            response = _as_dict(
+                self._client.chat_postMessage(
+                    channel=channel_id,
+                    text=text,
+                    unfurl_links=False,
+                    unfurl_media=False,
+                ),
+            )
         except SlackApiError as exc:
             msg = f"Failed to send Slack message to {channel_id}: {exc.response.get('error', 'unknown')}"
             raise ValueError(msg) from exc

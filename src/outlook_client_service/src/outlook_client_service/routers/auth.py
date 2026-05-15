@@ -86,8 +86,17 @@ def create_slack_auth_token(slack_user_id: str) -> str:
 
 
 def _resolve_slack_auth_token(slack_auth_token: str) -> str:
-    """Resolve a Slack auth token to a Slack user ID"""
-    slack_user_id = _pending_slack_auth_tokens.pop(slack_auth_token, None)
+    """Resolve a Slack auth token to a Slack user ID.
+
+    Uses ``dict.get`` rather than ``dict.pop`` so the token survives any
+    GET that isn't the user's real click — browser pre-fetchers and
+    URL-scanning antivirus all issue a GET that would otherwise consume
+    a single-use token and leave the user with a 400. The trade-off is
+    that tokens accumulate in ``_pending_slack_auth_tokens`` until the
+    process restarts; a future iteration should sign them as JWTs so the
+    server-side dict can be removed entirely.
+    """
+    slack_user_id = _pending_slack_auth_tokens.get(slack_auth_token)
     if not slack_user_id:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
