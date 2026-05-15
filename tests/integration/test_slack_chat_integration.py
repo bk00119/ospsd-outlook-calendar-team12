@@ -263,7 +263,12 @@ def test_chat_route_uses_registered_shared_chat_client(
     assert recorded_requests == [
         {
             "path": "/chat.postMessage",
-            "json": {"channel": "C_INTEGRATION", "text": "Created event: review at 2pm."},
+            "json": {
+                "channel": "C_INTEGRATION",
+                "text": "Created event: review at 2pm.",
+                "unfurl_links": False,
+                "unfurl_media": False,
+            },
         },
     ]
 
@@ -322,6 +327,11 @@ def test_chat_request_runs_ai_calendar_action_and_sends_chat_response(
     assert recorded_requests == [
         {
             "path": "/chat.postMessage",
-            "json": {"channel": "C_INTEGRATION", "text": response_text},
+            "json": {
+                "channel": "C_INTEGRATION",
+                "text": response_text,
+                "unfurl_links": False,
+                "unfurl_media": False,
+            },
         },
     ]
