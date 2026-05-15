@@ -49,9 +49,24 @@ class FakeSlackWebClient:
         }
         self.delete_response: dict[str, Any] = {"ok": True}
 
-    def chat_postMessage(self, *, channel: str, text: str) -> dict[str, Any]:  # noqa: N802
+    def chat_postMessage(  # noqa: N802
+        self,
+        *,
+        channel: str,
+        text: str,
+        unfurl_links: bool = True,
+        unfurl_media: bool = True,
+    ) -> dict[str, Any]:
         """Record and return a fake post response."""
-        self.calls.append(("chat_postMessage", {"channel": channel, "text": text}))
+        self.calls.append((
+            "chat_postMessage",
+            {
+                "channel": channel,
+                "text": text,
+                "unfurl_links": unfurl_links,
+                "unfurl_media": unfurl_media,
+            },
+        ))
         return self.post_response
 
     def conversations_list(self, **kwargs: object) -> dict[str, Any]:
@@ -87,7 +102,17 @@ def test_send_message_maps_slack_response() -> None:
     assert message.text == "hello"
     assert message.sender == "B123"
     assert message.timestamp == datetime.fromtimestamp(1770000000.000001, tz=UTC)
-    assert fake.calls == [("chat_postMessage", {"channel": "C123", "text": "hello"})]
+    assert fake.calls == [
+        (
+            "chat_postMessage",
+            {
+                "channel": "C123",
+                "text": "hello",
+                "unfurl_links": False,
+                "unfurl_media": False,
+            },
+        ),
+    ]
 
 
 def test_get_channels_maps_slack_response() -> None:
